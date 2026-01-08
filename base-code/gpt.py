@@ -12,7 +12,6 @@ n_layers = 2        # 解码器层数
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=128):
         super().__init__()
-        # TODO: 正弦位置矩阵 pe[max_len, d_model] 并 register_buffer
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000) / d_model))
@@ -21,14 +20,12 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe.unsqueeze(0))
 
     def forward(self, x):
-        # TODO: 返回 pe[:, :x.size(1)]
         return self.pe[:, :x.size(1)]
 
 # ===== 2. 多头注意力 =====
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model, n_heads):
         super().__init__()
-        # TODO: 4 个 Linear + d_k = d_model//n_heads
         self.d_model = d_model
         self.n_heads = n_heads
         self.d_k = self.d_model // self.n_heads
@@ -38,7 +35,6 @@ class MultiHeadAttention(nn.Module):
         self.linear = nn.Linear(d_model, d_model)
 
     def forward(self, x, mask=None):
-        # TODO: split→scaled_dot→concat→linear→残差
         batch_size, residual = x.size(0), x
         Q = self.q_s(x).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
         K = self.k_s(x).view(batch_size, -1, self.n_heads, self.d_k).transpose(1, 2)
@@ -57,12 +53,10 @@ class MultiHeadAttention(nn.Module):
 class FeedForward(nn.Module):
     def __init__(self, d_model, d_ff):
         super().__init__()
-        # TODO: Linear(d_model→d_ff)→GELU→Linear(d_ff→d_model)
         self.linear1 = nn.Linear(d_model, d_ff)
         self.linear2 = nn.Linear(d_ff, d_model)
 
     def forward(self, x):
-        # TODO: 前向 + 残差
         output = self.linear1(x)
         output = nn.functional.gelu(output)
         output = self.linear2(output)
@@ -72,14 +66,12 @@ class FeedForward(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self, d_model, n_heads, d_ff):
         super().__init__()
-        # TODO: MultiHeadAttention + FeedForward + LayerNorm
         self.attn = MultiHeadAttention(d_model, n_heads)
         self.feed = FeedForward(d_model, d_ff)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
 
     def forward(self, x, mask=None):
-        # TODO: 残差连接：x = x + MHA(LN(x)) → x = x + FF(LN(x))
         x = self.norm1(x)
         x = x + self.attn(x, mask)
         return x + self.feed(self.norm2(x))
@@ -88,14 +80,12 @@ class TransformerBlock(nn.Module):
 class GPTCore(nn.Module):
     def __init__(self, vocab_size, d_model, n_layers, n_heads, d_ff, max_len=128):
         super().__init__()
-        # TODO: TokenEmbedding + PositionalEncoding + TransformerBlock×n_layers
         self.embedded = nn.Embedding(vocab_size, d_model)
         self.position = PositionalEncoding(d_model, max_len)
         self.blocks = nn.ModuleList([TransformerBlock(d_model, n_heads, d_ff) for _ in range(n_layers)])
         self.linear = nn.Linear(d_model, vocab_size)
 
     def forward(self, x, mask=None):
-        # TODO: 嵌入→逐块 Transformer→返回 logits
         x = self.embedded(x) + self.position(x)
         for blk in self.blocks:
             x = blk(x, mask)
