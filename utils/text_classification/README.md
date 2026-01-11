@@ -12,10 +12,13 @@
 目前已实现以下文本分类方法，持续更新中：
 | 方法类型 | 具体模型/算法 | 核心依赖 | 适用场景 |
 |----------|---------------|----------|----------|
+| 传统机器学习 | KNN | scikit-learn | 易解释、需要快速落地 |
+| 传统机器学习 | Decision Tree（决策树） | scikit-learn | 易解释、需要快速落地 |
+| 传统机器学习 | Random Forest（随机森林） | scikit-learn | 易解释、需要快速落地 |
+| 传统机器学习 | Logistic Regression（逻辑回归） | scikit-learn | 易解释、需要快速落地 |
 | 传统机器学习 | Naive Bayes（朴素贝叶斯） | scikit-learn | 简单场景、数据量较小 |
 | 传统机器学习 | SVM（支持向量机） | scikit-learn | 文本分类基准、中等数据量 |
-| 传统机器学习 | Logistic Regression（逻辑回归） | scikit-learn | 易解释、需要快速落地 |
 | 深度学习（基础） | CNN（卷积神经网络） | PyTorch/TensorFlow | 捕捉局部文本特征、短文本 |
 | 深度学习（基础） | LSTM（长短期记忆网络） | PyTorch/TensorFlow | 捕捉文本序列依赖、长文本 |
-| 预训练语言模型 | BERT（Bidirectional Encoder Representations from Transformers） | Hugging Face Transformers | 高精度需求、充足算力、各类文本场景 |
+| 预训练语言模型 | BERT | Hugging Face Transformers | 高精度需求、充足算力、各类文本场景 |
 | 预训练语言模型 | RoBERTa（优化版BERT） | Hugging Face Transformers | 比BERT更高的精度、充足算力 |
