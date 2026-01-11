@@ -10,7 +10,7 @@ import pickle
 
 # 数据加载：读取数据集并进行预处理
 dataset = pd.read_csv(
-    "/Users/wangyingyue/materials/大模型学习资料——八斗/第一周：课程介绍及大模型基础/Week01/Week01/dataset.csv",
+    "dataset.csv",
     sep='\t',
     header=None
 )
@@ -27,27 +27,27 @@ x_train, x_test, labels_train, labels_test = train_test_split(
 )
 
 # 加载BERT分词器和分类模型，用于文本编码和后续训练
-tokenizer = BertTokenizer.from_pretrained("/Users/wangyingyue/materials/大模型学习资料——八斗/models/google-bert/bert-base-chinese")
+tokenizer = BertTokenizer.from_pretrained("bert-base-chinese")
 model = BertForSequenceClassification.from_pretrained(
-    "/Users/wangyingyue/materials/大模型学习资料——八斗/models/google-bert/bert-base-chinese",
+    "bert-base-chinese",
     num_labels=12
 )
 
-# 对训练集文本进行编码处理：填充、截断、限制最大长度
+
 train_encodings = tokenizer(
     x_train,
     padding=True,
     truncation=True,
     max_length=64
 )
-# 对测试集文本进行编码处理，参数与训练集保持一致
+
 test_encodings = tokenizer(
     x_test,
     padding=True,
     truncation=True,
     max_length=64
 )
-# 自动选择最佳计算设备：优先MPS（苹果芯片）→ CUDA（NVIDIA显卡）→ CPU
+
 device = torch.device("mps" if torch.backends.mps.is_available() else
                       "cuda" if torch.cuda.is_available() else
                       "cpu")
@@ -105,9 +105,7 @@ lbl_path = os.path.join(save_dir, 'label_encoder.pkl')
 
 # 断点续训逻辑：如果已存在训练好的模型和标签编码器，直接加载；否则执行训练
 if os.path.exists(os.path.join(model_path, "model.safetensors")) and os.path.exists(lbl_path):
-    # 加载已保存的模型
     model = BertForSequenceClassification.from_pretrained(model_path)
-    # 将模型迁移到最佳计算设备
     model.to(device)
 
     # 加载标签编码器，保证标签映射关系与训练时一致
@@ -116,11 +114,8 @@ if os.path.exists(os.path.join(model_path, "model.safetensors")) and os.path.exi
 
     print("模型加载完成！")
 else:
-    # 执行模型训练，自动完成epoch循环和梯度更新
     trainer.train()
-    # 在测试集上进行最终评估，输出评估指标
     trainer.evaluate()
-    # 将Trainer中的最优模型赋值给全局model变量，用于后续推理和保存
     model = trainer.model
     # 创建保存目录（若不存在）
     os.makedirs(save_dir, exist_ok=True)
@@ -133,14 +128,10 @@ else:
 
 # 定义推理函数，支持单条或多条文本的分类预测
 def prediction(texts):
-    # 初始化预测结果列表
     labels = []
-    # 处理单条文本输入，转换为列表格式统一处理
     if not isinstance(texts, list):
         texts = [texts]
-    # 遍历所有待预测文本，逐一进行编码和预测
     for text in texts:
-        # 对单条文本进行编码，返回pytorch张量
         encodings = tokenizer(
             text,
             padding=True,
@@ -148,14 +139,10 @@ def prediction(texts):
             max_length=64,
             return_tensors='pt'
         )
-        # 将编码结果迁移到模型所在设备
         encodings = encodings.to(device)
 
-        # 关闭梯度计算，提升推理速度并节省内存
         with torch.no_grad():
-            # 模型前向传播，获取输出logits
             logits = model(**encodings).logits
-        # 取argmax获取预测类别索引，并迁移到CPU转换为标量
         index = torch.argmax(logits, dim=-1).cpu().item()
         # 将数字标签转换为文本标签
         label = lbl.inverse_transform([index])[0]
