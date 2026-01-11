@@ -2,9 +2,6 @@
 """
 项目名称：中文文本多分类（智能指令分类）
 功能描述：使用TF-IDF提取文本特征，集成多种机器学习模型进行分类，包含交叉验证评估和测试集预测
-依赖库：jieba, pandas, numpy, scikit-learn
-作者：（可填写你的名字/昵称）
-创建日期：（可填写当前日期，如2026-01-12）
 """
 
 import jieba
@@ -23,7 +20,7 @@ from sklearn.svm import LinearSVC
 
 # 加载数据集（注：使用者需修改为自己的数据集路径）
 dataset = pd.read_csv(
-    "/Users/wangyingyue/materials/大模型学习资料——八斗/第一周：课程介绍及大模型基础/Week01/Week01/dataset.csv",
+    "dataset.csv",
     sep="\t",
     header=None
 )
