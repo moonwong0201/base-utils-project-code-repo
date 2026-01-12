@@ -1,6 +1,21 @@
 # 文本分类多方法实现（Text Classification with Multiple Approaches）
 > 一个包含多种经典/主流文本分类方法的实现仓库，涵盖传统机器学习、深度学习（CNN/RNN/Transformer）等方案，支持直接运行和二次开发。
 
+## 数据集格式说明
+### 数据格式
+- 文件格式：csv文件
+- 分隔符：制表符 **\t**
+- 列顺序：第1列=文本内容，第2列=分类标签（对应12个类别）
+### 数据样例
+| 文本内容 | 分类标签 |
+| --- | --- |
+| 还有双鸭山到淮阴的汽车票吗13号的 | Travel-Query |
+| 河南新闻广播找一下啊是新闻台 | Radio-Listen |
+| 随便播放一首专辑阁楼里的佛里的歌 | Music-Play |
+| 给看一下墓王之王嘛 | FilmTele-Play |
+| 我想看挑战两把s686打突变团竞的游戏视频 | Video-Play |
+| 客厅空调风速低一些低一些 | HomeAppliance-Control |
+
 ## 一、 项目概述（Project Overview）
 ### 1.1 项目简介
 本仓库旨在整理和实现多种文本分类的核心方法，从传统的基于统计特征的机器学习模型，到现代的基于深度语义的预训练语言模型，提供一套完整、可复现的文本分类解决方案。
@@ -18,6 +33,7 @@
 | 传统机器学习 | Logistic Regression（逻辑回归） | scikit-learn | 易解释、需要快速落地 |
 | 传统机器学习 | Naive Bayes（朴素贝叶斯） | scikit-learn | 简单场景、数据量较小 |
 | 传统机器学习 | SVM（支持向量机） | scikit-learn | 文本分类基准、中等数据量 |
+| 大模型提示词分类 | 通义千问 | 大模型API服务、提示词工程 | 少样本/零样本分类任务 |
 | 深度学习（基础） | CNN（卷积神经网络） | PyTorch/TensorFlow | 捕捉局部文本特征、短文本 |
 | 深度学习（基础） | LSTM（长短期记忆网络） | PyTorch/TensorFlow | 捕捉文本序列依赖、长文本 |
 | 预训练语言模型 | BERT | Hugging Face Transformers | 高精度需求、充足算力、各类文本场景 |
