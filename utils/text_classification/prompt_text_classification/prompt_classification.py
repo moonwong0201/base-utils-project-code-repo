@@ -5,21 +5,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
-# ... (Data loading and preprocessing remains the same) ...
-# dataset = pd.read_csv(
-#     "/Users/wangyingyue/materials/大模型学习资料——八斗/第一周：课程介绍及大模型基础/Week01/Week01/dataset.csv",
-#     sep="\t",
-#     header=None
-# )
-
 # 云端大模型
 client = OpenAI(
-    # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
-    # https://bailian.console.aliyun.com/?tab=model#/api-key
-    api_key="sk-078ae61448344f53b3cb03bcc85ff7cd",
-
-    # 大模型厂商的地址
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    api_key=API-KEY,
+    base_url=API-URL
 )
 
 
