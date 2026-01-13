@@ -28,7 +28,7 @@ device = torch.device(
 print(f"使用设备: {device}")
 
 # ================== 超参数 ==================
-CSV_PATH = "/Users/wangyingyue/materials/大模型学习资料——八斗/第一周：课程介绍及大模型基础/Week01/Week01/dataset.csv"
+CSV_PATH = "dataset.csv"
 MAX_LEN = 40          # 每条文本最多使用的字符数
 HIDDEN_DIM = 32       # 隐藏层维度
 BATCH_SIZE = 64
@@ -156,7 +156,7 @@ def train():
     # 构建字符词表
     char_to_index, index_to_char, vocab_size = build_vocab(texts)
 
-    # 划分训练集 / 验证集（保持类别分布一致）
+    # 划分训练集 / 验证集
     texts_train, texts_val, labels_train, labels_val = train_test_split(
         texts,
         numerical_labels,
