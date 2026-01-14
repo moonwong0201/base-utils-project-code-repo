@@ -33,8 +33,9 @@
 | 传统机器学习 | Logistic Regression（逻辑回归） | scikit-learn | 易解释、需要快速落地 |
 | 传统机器学习 | Naive Bayes（朴素贝叶斯） | scikit-learn | 简单场景、数据量较小 |
 | 传统机器学习 | SVM（支持向量机） | scikit-learn | 文本分类基准、中等数据量 |
-| 大模型提示词分类 | 通义千问 | 大模型API服务、提示词工程 | 少样本/零样本分类任务 |
-| 深度学习（基础） | CNN（卷积神经网络） | PyTorch/TensorFlow | 捕捉局部文本特征、短文本 |
-| 深度学习（基础） | LSTM（长短期记忆网络） | PyTorch/TensorFlow | 捕捉文本序列依赖、长文本 |
+| 传统机器学习 | 词袋模型（Bow） | scikit-learn | 文本分类基准、中等数据量 |
+| 深度学习（序列模型） | GRU（门控循环单元） | PyTorch/TensorFlow | 捕捉文本序列依赖、长文本、追求高效训练 |
+| 深度学习（序列模型） | LSTM（长短期记忆网络） | PyTorch/TensorFlow | 捕捉文本序列依赖、长文本 |
 | 预训练语言模型 | BERT | Hugging Face Transformers | 高精度需求、充足算力、各类文本场景 |
+| 大模型提示词分类 | 通义千问 | 大模型API服务、提示词工程 | 少样本/零样本分类任务 |
 | 预训练语言模型 | RoBERTa（优化版BERT） | Hugging Face Transformers | 比BERT更高的精度、充足算力 |
