@@ -13,7 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
 # ========== 全局超参数配置 ==========
-CSV_PATH = "/Users/wangyingyue/materials/大模型学习资料——八斗/第一周：课程介绍及大模型基础/Week01/Week01/dataset.csv"
+CSV_PATH = "dataset.csv"
 MODEL_DIR = "checkpoints"
 MODEL_NAME = "transformer_cls.pt"
 MAX_LEN = 40
