@@ -22,10 +22,10 @@ DEVICE = "mps" if (torch.backends.mps.is_available() and torch.backends.mps.is_b
     "cuda" if torch.cuda.is_available() else "cpu"
 
 # 本地 GPT-2 模型路径
-MODEL_NAME = "/Users/wangyingyue/materials/大模型学习资料——八斗/models/openai-community/gpt2"
+MODEL_NAME = "models/openai-community/gpt2"
 
 # 对话数据路径（User: / AI: 格式）
-DATA_FILE_PATH = "/Users/wangyingyue/materials/大模型学习资料——八斗/第五周：BERT模型进阶与大模型基础/Week05/chat.txt"
+DATA_FILE_PATH = "chat.txt"
 
 # 微调后模型保存路径
 MODEL_SAVE_PATH = "best_gpt2_chat.pth"
@@ -62,7 +62,7 @@ model = GPT2LMHeadModel.from_pretrained(MODEL_NAME)
 model.resize_token_embeddings(len(tokenizer))
 model.to(DEVICE)
 
-# 分隔符对应的 token id（后面频繁使用）
+# 分隔符对应的 token id
 SEP_TOKEN_ID = tokenizer.convert_tokens_to_ids(SEP_TOKEN)
 
 
@@ -71,8 +71,6 @@ class ChatDataset(Dataset):
     """
     数据集设计：
     - 输入格式：User + SEP + AI + EOS
-    - 一行 User 对应一行 AI
-    - 这是“融合式（single sequence）对话建模”
     """
     def __init__(self, file_path, tokenizer):
         self.tokenizer = tokenizer
@@ -90,7 +88,7 @@ class ChatDataset(Dataset):
             if not line:
                 continue
 
-            # 读取 User 输入（暂存）
+            # 读取 User 输入
             if line.startswith("User:"):
                 user = self.tokenizer.encode(line[6:], add_special_tokens=False)
 
@@ -115,9 +113,7 @@ class ChatDataset(Dataset):
 # collate
 def collate_fn(batch):
     """
-    作用：
     - 对不同长度的序列进行 padding
-    - padding token = pad_token_id（这里等于 eos）
     """
     max_len = max(len(x) for x in batch)
     padded = torch.full(
@@ -188,8 +184,6 @@ def train(model, loader):
 # generation
 def generate(model, text):
     """
-    推理逻辑：
-    - 输入：User + SEP
     - 让模型自回归生成 SEP 后面的内容（AI）
     """
     model.eval()
