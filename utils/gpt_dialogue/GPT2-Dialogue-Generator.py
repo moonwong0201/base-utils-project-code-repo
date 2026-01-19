@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-GPT-2 英文对话微调（工程化优化版）
+GPT-2 英文对话微调（分离式）
 功能：基于GPT2微调对话数据集，支持Beam Search生成回复
 """
 
@@ -11,16 +11,14 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
-# ======================================
 # 全局可配置参数
-# ======================================
 # 设备相关
 DEVICE = "mps" if (torch.backends.mps.is_available() and torch.backends.mps.is_built()) else \
     "cuda" if torch.cuda.is_available() else "cpu"
 
 # 路径相关
-MODEL_NAME = "/Users/wangyingyue/materials/大模型学习资料——八斗/models/openai-community/gpt2"  # GPT2模型本地路径
-DATA_FILE_PATH = "/Users/wangyingyue/materials/大模型学习资料——八斗/第五周：BERT模型进阶与大模型基础/Week05/chat.txt"  # 对话数据集路径
+MODEL_NAME = "gpt2"  # GPT2模型本地路径
+DATA_FILE_PATH = "chat.txt"  # 对话数据集路径
 MODEL_SAVE_PATH = "gpt.pt"  # 训练完成后模型权重保存路径
 
 # 训练超参
@@ -33,16 +31,12 @@ WEIGHT_DECAY = 0.01  # 权重衰减（防止过拟合）
 GEN_MAX_LEN = 40  # 生成回复的最大长度
 BEAM_WIDTH = 4  # Beam Search束宽
 
-# ======================================
 # 环境配置（MPS显存优化，针对Mac GPU）
-# ======================================
 os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
 os.environ["PYTORCH_MPS_ENABLE_MEMORY_POOL"] = "1"
 os.environ["PYTORCH_MPS_FAST_MEMORY"] = "1"
 
-# ======================================
 # 1. 加载分词器与预训练模型
-# ======================================
 # 加载GPT2分词器，设置pad_token（GPT2原生无pad，复用eos_token）
 tokenizer = GPT2Tokenizer.from_pretrained(MODEL_NAME)
 tokenizer.pad_token = tokenizer.eos_token
@@ -53,9 +47,7 @@ model = GPT2LMHeadModel.from_pretrained(MODEL_NAME).to(DEVICE)
 vocab = tokenizer.get_vocab()  # 获取词汇表字典（新版transformers兼容）
 
 
-# ======================================
 # 2. 自定义对话数据集（加载chat.txt，处理User/AI格式）
-# ======================================
 class ChatDataset(Dataset):
     """
     自定义Dataset：
@@ -119,10 +111,7 @@ class ChatDataset(Dataset):
         """按索引返回单组样本（User输入，AI回复）"""
         return self.user_inputs[idx], self.ai_answers[idx]
 
-
-# ======================================
 # 3. 数据处理工具（批次对齐、填充）
-# ======================================
 def pad_sequence(sequences, padding_value=0, length=None):
     """
     序列填充函数：将多个序列补齐到同一长度（方便批次训练）
@@ -163,9 +152,7 @@ def collate_fn(batch):
     return sources_padded, targets_padded
 
 
-# ======================================
 # 4. 训练循环（核心训练逻辑）
-# ======================================
 def train(model, train_loader, criterion, optimizer, epochs, save_path):
     """
     模型训练函数：
@@ -215,9 +202,7 @@ def train(model, train_loader, criterion, optimizer, epochs, save_path):
     print(f"\n模型权重已成功保存至：{save_path}")
 
 
-# ======================================
 # 5. 文本生成（Beam Search策略）
-# ======================================
 def generate_text_beam_search(model, tokenizer, input_str, max_len, beam_width, device):
     """
     基于Beam Search的文本生成函数：
@@ -267,9 +252,7 @@ def generate_text_beam_search(model, tokenizer, input_str, max_len, beam_width, 
     return output_str
 
 
-# ======================================
 # 6. 主流程
-# ======================================
 def main():
     """主函数：按顺序执行数据加载、训练、生成测试"""
     # 步骤1：构建数据集和数据加载器
