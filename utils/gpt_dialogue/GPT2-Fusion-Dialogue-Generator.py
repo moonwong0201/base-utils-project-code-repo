@@ -1,16 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-GPT-2 中文对话微调（融合式版） —— 修正监督与分隔符
-
-核心思想：
-1. 将一轮对话融合为：User + SEP + AI + EOS
-2. 训练时只对 AI 部分计算 loss（User 不参与监督）
-3. 推理时用同样的格式，让模型“续写 AI”
+GPT-2 中文对话微调（融合式版）
 """
 
 import os
 
-# ====== MPS 显存相关环境变量 ======
+# MPS 显存相关环境变量
 # 作用：降低 PyTorch 在 Apple MPS 上的显存保留策略，避免“假性 OOM”
 os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
 os.environ["PYTORCH_MPS_ENABLE_MEMORY_POOL"] = "1"
@@ -20,7 +15,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
-# ======================================
+
 # 全局参数
 # 自动选择设备：MPS / CUDA / CPU
 DEVICE = "mps" if (torch.backends.mps.is_available() and torch.backends.mps.is_built()) else \
@@ -45,16 +40,15 @@ WEIGHT_DECAY = 0.01
 GEN_MAX_LEN = 40
 BEAM_WIDTH = 4  # num_beams > 1 即 Beam Search
 
-# ====== 对话分隔符 ======
+
 # 用于显式区分 User 和 AI
 SEP_TOKEN = "|"
 
-# ======================================
+
 # tokenizer & model
 tokenizer = GPT2Tokenizer.from_pretrained(MODEL_NAME)
 
 # 如果分隔符不在词表中，则手动加入
-# 否则 tokenizer 会把 "|" 拆成未知 token
 if SEP_TOKEN not in tokenizer.get_vocab():
     tokenizer.add_tokens([SEP_TOKEN])
 
@@ -72,7 +66,6 @@ model.to(DEVICE)
 SEP_TOKEN_ID = tokenizer.convert_tokens_to_ids(SEP_TOKEN)
 
 
-# ======================================
 # Dataset
 class ChatDataset(Dataset):
     """
@@ -119,7 +112,6 @@ class ChatDataset(Dataset):
         return self.data[idx]
 
 
-# ======================================
 # collate
 def collate_fn(batch):
     """
@@ -137,9 +129,8 @@ def collate_fn(batch):
         padded[i, :len(seq)] = seq
     return padded
 
-# ======================================
-# ====== 关键：构造 labels（只监督 AI） ======
-# ======================================
+
+# 构造 labels（只监督 AI）
 def build_labels(input_ids):
     """
     核心思想：
@@ -156,7 +147,7 @@ def build_labels(input_ids):
 
     return labels
 
-# ======================================
+
 # training
 def train(model, loader):
     optimizer = torch.optim.AdamW(
@@ -194,7 +185,6 @@ def train(model, loader):
     torch.save(model.state_dict(), MODEL_SAVE_PATH)
 
 
-# ======================================
 # generation
 def generate(model, text):
     """
@@ -227,7 +217,6 @@ def generate(model, text):
     sep_idx = (out == SEP_TOKEN_ID).nonzero(as_tuple=True)[0][0] + 1
     return tokenizer.decode(out[sep_idx:], skip_special_tokens=True)
 
-# ======================================
 # main
 def main():
     dataset = ChatDataset(DATA_FILE_PATH, tokenizer)
