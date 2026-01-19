@@ -9,7 +9,7 @@ es = Elasticsearch("http://localhost:9200")
 # 1. 生成向量: 加载预训练模型
 # 这个模型可以将句子转换为 512 维的向量
 print("正在加载 SentenceTransformer 模型...")
-model = SentenceTransformer('/Users/wangyingyue/materials/大模型学习资料——八斗/models/bge_models/BAAI/bge-small-zh-v1.5')
+model = SentenceTransformer('models/bge_models/BAAI/bge-small-zh-v1.5')
 print("模型加载完成。")
 
 test_text = "测试文本"
