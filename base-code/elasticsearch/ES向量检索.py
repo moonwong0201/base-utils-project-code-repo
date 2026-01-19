@@ -3,7 +3,6 @@ import time
 from elasticsearch import Elasticsearch
 from sentence_transformers import SentenceTransformer
 
-# 替换为你的 Elasticsearch 地址
 es = Elasticsearch("http://localhost:9200")
 
 # 1. 生成向量: 加载预训练模型
@@ -98,7 +97,6 @@ response = es.search(
     }
 )
 
-# 打印结果
 print(f"查询文本: '{query_text}'")
 print(f"找到 {response['hits']['total']['value']} 个最相关的结果:")
 
