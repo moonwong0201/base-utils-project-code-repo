@@ -1,7 +1,6 @@
 # pip install elasticsearch
 from elasticsearch import Elasticsearch
 
-# 替换为你的 Elasticsearch 地址
 ELASTICSEARCH_URL = "http://localhost:9200"
 
 # 如果没有安全认证，直接创建客户端
@@ -16,7 +15,7 @@ else:
 # 定义索引名称和映射
 index_name = "blog_posts_py"  # 创建一个索引，索引可以理解为数据库表
 
-# 删除索引（谨慎操作！会清空所有数据）
+# 删除索引
 if es_client.indices.exists(index=index_name):
     es_client.indices.delete(index=index_name)  # 存在则删除该索引（会清空所有数据）
     print(f"索引 {index_name} 已删除")
