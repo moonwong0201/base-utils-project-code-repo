@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+# 基于qwen大模型的RAG问答
 import json
 import pdfplumber
 from openai import OpenAI
@@ -6,8 +8,8 @@ from openai import OpenAI
 # 调用通义千问Qwen模型函数：基于OpenAI兼容模式，传入提示词返回模型回答，统一处理换行符
 def ask_qwen(prompt):
     client = OpenAI(
-        api_key="sk-078ae61448344f53b3cb03bcc85ff7cd",
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",  # 阿里云Qwen兼容OpenAI的API地址
+        api_key=API-KEY,
+        base_url=URL,
     )
 
     response = client.chat.completions.create(
@@ -22,8 +24,7 @@ def ask_qwen(prompt):
 
 
 # 加载PDF文档和BGE+BM25融合重排序后的检索结果（含每个问题匹配的最优PDF页码）
-pdf = pdfplumber.open(
-    "/Users/wangyingyue/materials/大模型学习资料——八斗/第六周：RAG工程化实现/Week06/Week06/汽车知识手册.pdf")
+pdf = pdfplumber.open("汽车知识手册.pdf")
 bge_bm25 = json.load(open('submit_fusion_bge+bm25_rerank_retrieval.json'))
 
 fusion_result = []
