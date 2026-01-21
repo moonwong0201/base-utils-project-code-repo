@@ -105,5 +105,5 @@
   ```
 
 
-
+重排序结果见 **submit_fusion_bge+bm25_rerank_retrieval.json**
 最终的结果见 **submit_fusion_bge+bm25_rerank_retrieval_qwen.json**
