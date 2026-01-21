@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
-
+# 重排序实现
 import json
 import pdfplumber
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import torch
 
-# ---- 加载数据 ----
-questions = json.load(open("/Users/wangyingyue/materials/大模型学习资料——八斗/第六周：RAG工程化实现/Week06/Week06/questions.json"))
-pdf = pdfplumber.open("/Users/wangyingyue/materials/大模型学习资料——八斗/第六周：RAG工程化实现/Week06/Week06/汽车知识手册.pdf")
+# 加载数据
+questions = json.load(open("questions.json"))
+pdf = pdfplumber.open("汽车知识手册.pdf")
 pdf_content = []
 for i in range(len(pdf.pages)):
     pdf_content.append({
@@ -15,16 +15,16 @@ for i in range(len(pdf.pages)):
         'content': pdf.pages[i].extract_text() or ''
     })
 
-# ---- 加载重排序模型 ----
-tokenizer = AutoTokenizer.from_pretrained("/Users/wangyingyue/materials/大模型学习资料——八斗/models/bge_models/BAAI/bge-reranker-base")
-rerank_model = AutoModelForSequenceClassification.from_pretrained("/Users/wangyingyue/materials/大模型学习资料——八斗/models/bge_models/BAAI/bge-reranker-base")
+# 加载重排序模型
+tokenizer = AutoTokenizer.from_pretrained("bge_models/BAAI/bge-reranker-base")
+rerank_model = AutoModelForSequenceClassification.from_pretrained("bge_models/BAAI/bge-reranker-base")
 rerank_model.eval()
 
-# ---- 召回文件 ----
+# 召回文件
 bge = json.load(open("submit_bge_segment_retrieval_top10.json"))
 bm25 = json.load(open("submit_bm25_retrieval_top10.json"))
 
-# ---- 融合 + 重排序 ----
+# 融合 + 重排序
 fusion_result = []
 k = 60
 for q1, q2 in zip(bge, bm25):
@@ -63,6 +63,6 @@ for q1, q2 in zip(bge, bm25):
     q1['reference'] = sorted_dict[last_index][0]
     fusion_result.append(q1)
 
-# ---- 输出 ----
+# 输出
 with open('submit_fusion_bge+bm25_rerank_retrieval.json', 'w', encoding='utf8') as f:
     json.dump(fusion_result, f, ensure_ascii=False, indent=4)
