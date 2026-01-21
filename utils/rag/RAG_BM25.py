@@ -5,8 +5,8 @@ import jieba
 from rank_bm25 import BM25Okapi
 
 # 加载原始问题集和汽车知识手册PDF文件
-questions = json.load(open("/Users/wangyingyue/materials/大模型学习资料——八斗/第六周：RAG工程化实现/Week06/Week06/questions.json"))
-pdf = pdfplumber.open("/Users/wangyingyue/materials/大模型学习资料——八斗/第六周：RAG工程化实现/Week06/Week06/汽车知识手册.pdf")
+questions = json.load(open("questions.json"))
+pdf = pdfplumber.open("汽车知识手册.pdf")
 
 # 解析PDF所有页面，按页存储页码和文本内容，空文本做兜底处理
 pdf_content = []
