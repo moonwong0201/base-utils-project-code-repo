@@ -9,8 +9,8 @@ import re
 import uvicorn
 
 client = openai.OpenAI(
-    api_key="sk-078ae61448344f53b3cb03bcc85ff7cd",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    api_key=API-KEY,
+    base_url=URL,
 )
 
 app = FastAPI(
