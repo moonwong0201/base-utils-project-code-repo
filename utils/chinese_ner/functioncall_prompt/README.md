@@ -36,3 +36,7 @@
 
 ### 测试结果
 
+function call 结果：  
+![function_call](result.jpg)  
+提示词结果：  
+![prompt](prompt.jpg)  
