@@ -40,3 +40,5 @@ function call 结果：
 ![function_call](result.jpg)  
 提示词结果：  
 ![prompt](prompt.jpg)  
+
+从两个方法的结果可以看出，能够准确的抽取出**领域识别**、**意图识别**和**实体标签**，两种方法泛化能力都较强。
