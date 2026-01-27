@@ -203,7 +203,7 @@ if __name__ == "__main__":
     """
     主流程骨架：路径配置 → 模型初始化 → 训练/推理分支
     """
-    model_path = "/Users/wangyingyue/materials/大模型学习资料——八斗/models/Qwen/Qwen3-0.6B"
+    model_path = "Qwen3-0.6B"
 
     script_dir = os.path.dirname(os.path.abspath(__file__))  # 获取当前运行python脚本文件所在的绝对目录路径
     adapter_path = os.path.join(script_dir, "output_Qwen1.5/")
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     base_model, tokenizer = initialize_model_and_tokenizer(model_path)
 
     train_data = pd.read_csv(
-        "/Users/wangyingyue/materials/大模型学习资料——八斗/第七周：信息抽取与GraphRAG/Week07/Week07/intent-dataset.csv",
+        "intent-dataset.csv",
         sep='\t',
         header=None
     )
