@@ -1,9 +1,5 @@
 import os
 
-# https://bailian.console.aliyun.com/?tab=model#/api-key
-os.environ["OPENAI_API_KEY"] = "sk-078ae61448344f53b3cb03bcc85ff7cd"
-os.environ["OPENAI_BASE_URL"] = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
 from agents.mcp.server import MCPServerSse
 import asyncio
 from agents import Agent, Runner, AsyncOpenAI, OpenAIChatCompletionsModel
