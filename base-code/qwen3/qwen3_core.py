@@ -309,3 +309,7 @@ QWEN3_CONFIG = {
 
 # 初始化Qwen3模型
 model = Qwen3Model(QWEN3_CONFIG)
+
+# 统计模型的总参数数量（包括所有可训练参数）
+total_params = sum(p.numel() for p in model.parameters())
+print(f"Total number of parameters: {total_params:,}")
