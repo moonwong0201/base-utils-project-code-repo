@@ -47,7 +47,7 @@ def search_jina(query: str) -> str:
 async def main(question: str):
     external_client = AsyncOpenAI(
         api_key=os.environ["OPENAI_API_KEY"],
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        base_url=os.environ["OPENAI_BASE_URL"],
     )
 
     thinking_agent = Agent(
