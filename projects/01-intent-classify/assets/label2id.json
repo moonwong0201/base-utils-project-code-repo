@@ -1,0 +1,44 @@
+{
+  "label2id": {
+    "Alarm-Update": 0,
+    "Audio-Play": 1,
+    "Calendar-Query": 2,
+    "FilmTele-Play": 3,
+    "HomeAppliance-Control": 4,
+    "Music-Play": 5,
+    "Other": 6,
+    "Radio-Listen": 7,
+    "TVProgram-Play": 8,
+    "Travel-Query": 9,
+    "Video-Play": 10,
+    "Weather-Query": 11
+  },
+  "id2label": {
+    "0": "Alarm-Update",
+    "1": "Audio-Play",
+    "2": "Calendar-Query",
+    "3": "FilmTele-Play",
+    "4": "HomeAppliance-Control",
+    "5": "Music-Play",
+    "6": "Other",
+    "7": "Radio-Listen",
+    "8": "TVProgram-Play",
+    "9": "Travel-Query",
+    "10": "Video-Play",
+    "11": "Weather-Query"
+  },
+  "classes": [
+    "Alarm-Update",
+    "Audio-Play",
+    "Calendar-Query",
+    "FilmTele-Play",
+    "HomeAppliance-Control",
+    "Music-Play",
+    "Other",
+    "Radio-Listen",
+    "TVProgram-Play",
+    "Travel-Query",
+    "Video-Play",
+    "Weather-Query"
+  ]
+}
