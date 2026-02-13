@@ -1,0 +1,63 @@
+# es数据库 -> 存储、检索文档
+elasticsearch:
+  host: "localhost"  # ES 服务运行的主机地址（本地）
+  port: 9200         # ES 默认端口
+  scheme: "http"
+  username: ""       
+  password: ""       
+
+# 用于配置存储 RAG 系统元数据（如文档索引信息）的数据库
+database:
+  engine: "sqlite"  # 数据库引擎为 SQLite（轻量文件型数据库）
+  path: "rag.db"    # SQLite 数据库文件路径（当前为本地文件）
+  host: "localhost"
+  port: 3306       
+  username: ""      
+  password: ""     
+
+# 定义 RAG 系统中用到的三类模型：文本嵌入模型、重排序模型、大语言模型
+models:
+  # embedding_model与rerank_model都是基于bert结构
+  embedding_model:
+    # 文本特征提取的模型
+    bge-small-zh-v1.5:
+      hf_url: "https://huggingface.co/BAAI/bge-small-zh-v1.5"  # 文本提取特征的模型
+      local_url: "YOUR_LOCAL_MODEL_PATH/bge-small-zh-v1.5"     # 替换为你的本地模型路径
+      dims: 512  # 生成的向量维度
+    
+  rerank_model:
+    # 对检索结果进行重排序的模型
+    bge-reranker-base:
+      hf_url: "https://huggingface.co/BAAI/bge-reranker-base"  # 对检索结果进行重排序的模型
+      local_url: "YOUR_LOCAL_MODEL_PATH/bge-reranker-base"     # 替换为你的本地模型路径
+
+  llm:
+    # 大语言模型
+    config:
+      temperature: 0.1
+      top_p: 1
+      max_tokens_to_sample: 1024  # 限制最大生成长度
+    base_model:
+      glm:
+        tokens: "YOUR_GLM_TOKEN"  # GLM 模型 Token
+      qwen:
+        tokens: "YOUR_QWEN_TOKEN" # 通义千问 Token
+      gpt:
+        tokens: "YOUR_GPT_API_KEY" # GPT API Key
+
+device: "cuda"  # 本地为 CPU 则改为 "cpu"
+
+rag:
+  llm_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # 通义千问 API 地址
+  llm_api_key: "YOUR_DASHSCOPE_API_KEY"  # 替换为你的阿里云通义千问 API Key
+  llm_model: "qwen-plus"                 # 使用的大模型名称
+  embedding_model: "bge-small-zh-v1.5"
+  rerank_model: "bge-reranker-base"
+  chunk_size: 256     # 文档分块大小
+  chunk_overlap: 20   # 重叠部分
+  chunk_candidate: 10   # 检索候选文档数量
+  use_embedding: true
+  use_rerank: false
+  use_rrf: true
+  use_extract: false  # 是否调用抽取关键词操作
+  port: 8000
