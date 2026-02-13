@@ -74,11 +74,12 @@ Content-Type: application/json
 POST /v1/document
 Content-Type: multipart/form-data
 
-# 表单参数
-knowledge_id: 1
-title: Python基础语法
-category: 基础教程
-file: [选择本地 PDF 文件]
+{
+  knowledge_id: 1
+  title: Python基础语法
+  category: 基础教程
+  file: [选择本地 PDF 文件]
+}
 ```
 
 响应示例：
