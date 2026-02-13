@@ -43,7 +43,7 @@ python main.py
 
 #### 步骤 1：创建知识库
 
-```json
+```
 POST /v1/knowledge_base
 Content-Type: application/json
 
@@ -55,7 +55,7 @@ Content-Type: application/json
 
 响应示例：
 
-```json
+```
 {
   "request_id": "xxx",
   "knowledge_id": 1,
@@ -70,21 +70,21 @@ Content-Type: application/json
 
 #### 步骤 2：上传文档到知识库
 
-```json
+```
 POST /v1/document
 Content-Type: multipart/form-data
 
 {
   "knowledge_id": 1
-  "title": Python基础语法
-  "category": 基础教程
-  "file": [选择本地 PDF 文件]
+  "title": "Python基础语法"
+  "category": "基础教程"
+  "file": "本地 PDF 文件"
 }
 ```
 
 响应示例：
 
-```json
+```
 {
   "request_id": "xxx",
   "document_id": 1,
@@ -103,7 +103,7 @@ Content-Type: multipart/form-data
 
 #### 步骤 3：RAG 聊天
 
-```json
+```
 POST /chat
 Content-Type: application/json
 
@@ -117,7 +117,7 @@ Content-Type: application/json
 
 响应示例：
 
-```json
+```
 {
   "request_id": "xxx",
   "message": [
@@ -135,7 +135,7 @@ Content-Type: application/json
 
 继续提问时，需传入完整的历史消息列表：
 
-```json
+```
 POST /chat
 Content-Type: application/json
 
