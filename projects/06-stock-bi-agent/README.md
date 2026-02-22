@@ -1,4 +1,4 @@
-# 智能问答 + 工具调用系统
+![作业一](https://github.com/user-attachments/assets/29fe7dde-6977-401d-89fd-10a0670cd617)# 智能问答 + 工具调用系统
 
 ## 项目概述
 
@@ -140,3 +140,7 @@ streamlit run demo/streamlit_demo.py
 |              | `/v1/chat/feedback`              | `session_id: str, message_id: int, feedback: bool`           | 提交聊天消息的反馈结果，True 表示有用，False 表示无用  |
 
 ![侧边栏](side_bar.jpg)
+
+#### 测试
+
+![展示](展示.jpg)
