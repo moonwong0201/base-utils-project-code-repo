@@ -1,4 +1,4 @@
-![作业一](https://github.com/user-attachments/assets/29fe7dde-6977-401d-89fd-10a0670cd617)# 智能问答 + 工具调用系统
+# 智能问答 + 工具调用系统
 
 ## 项目概述
 
@@ -139,8 +139,20 @@ streamlit run demo/streamlit_demo.py
 |              | `/v1/chat/list`                  | `user_name: str`                                             | 查询当前用户的所有聊天会话列表                         |
 |              | `/v1/chat/feedback`              | `session_id: str, message_id: int, feedback: bool`           | 提交聊天消息的反馈结果，True 表示有用，False 表示无用  |
 
-![侧边栏](side_bar.jpg)
+## 技术优势
+
+- 基于 MCP 协议将股票查询、K 线获取、大盘数据等工具封装为了独立接口，单个工具出现问题时，不会影响 Agent 的整体运行；
+- 如果要新增/修改工具，无需改动 Agent 核心代码，仅需扩展工具接口；
+- 支持多工具并行调用，提高查询效率；
+- 基于 SQLite 数据库实现会话级数据隔离，每个对话生成唯一 session_id，历史对话、工具调用记录、上下文信息均保存在专属会话中；
+- 不同用户/不同对话之间数据完全隔离，避免上下文串扰
+- 支持历史对话继续聊天，新开的会话不影响已有会话状态
+- 会话数据可独立清理/备份，降低数据管理风险。
 
 #### 测试
 
+工具展示：  
+![侧边栏](side_bar.jpg)
+
+对话展示：
 ![展示](展示.jpg)
