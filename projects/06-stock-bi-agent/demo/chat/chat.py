@@ -11,6 +11,15 @@ from fastmcp import Client
 from fastmcp.tools import Tool
 from typing import List, Any
 import pandas as pd
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
 
 
 # FastMCP 服务器地址
@@ -166,12 +175,9 @@ async def request_chat(content: str, user_name: str, session_id: str) -> str:
         response = requests.post(url, headers=headers, json=data, stream=True, timeout=30)
         response.raise_for_status()
 
-        for line in response.iter_lines(decode_unicode=True):  # ← 用 iter_lines 代替 iter_content
-            if line and line.startswith("data: "):
-                # 去掉 "data: " 前缀
-                chunk = line[6:]  # ← 关键修复
-                if chunk:
-                    yield chunk
+        for line in response.iter_lines(decode_unicode=True):
+            if line and line.startswith("data:"):
+                yield line[5:].strip()
 
     except requests.exceptions.Timeout:
         yield "错误：请求超时，请稍后重试"
@@ -322,12 +328,16 @@ if prompt := st.chat_input(accept_file="multiple", file_type=["txt", "pdf", "jpg
             with st.spinner("请求中..."):
                 async def stream_output():
                     accumulated_text = ""
+                    chunk_count = 0
                     # 调用流式请求函数
                     response_generator = request_chat(prompt, st.session_state['user_name'], st.session_state['session_id'])
                     async for data in response_generator:
+                        chunk_count += 1
                         accumulated_text += data
                         placeholder.markdown(accumulated_text + "▌")  # 后端不断sse输出内容，前端通过markdown渲染
+                        # logger.info(f"[前端第{chunk_count}块] {repr(data[:50])}")
 
+                    # logger.info(f"[前端最终文本] {repr(accumulated_text[:200])}")
                     return accumulated_text
 
                 # 执行异步流式输出
