@@ -58,13 +58,13 @@ async def chat(req: RequestForChat) -> StreamingResponse:
     if not req.user_name.strip():
         # 流式响应异常处理：返回符合SSE格式的错误信息
         async def error_generator():
-            yield f"data: {BasicResponse(code=400, message='用户名不能为空', data={}).model_dump_json()}\n\n"
+            yield BasicResponse(code=400, message='用户名不能为空', data={}).model_dump_json()
 
         return StreamingResponse(error_generator(), media_type="text/event-stream", status_code=400)
 
     if not req.content.strip():
         async def error_generator():
-            yield f"data: {BasicResponse(code=400, message='聊天内容不能为空', data={}).model_dump_json()}\n\n"
+            yield BasicResponse(code=400, message='聊天内容不能为空', data={}).model_dump_json()
 
         return StreamingResponse(error_generator(), media_type="text/event-stream", status_code=400)
 
@@ -82,11 +82,11 @@ async def chat(req: RequestForChat) -> StreamingResponse:
                 ):
                     # 每次迭代获取一个数据块并立即 yield 返回
                     # 将 chat_services.chat 生成的每个数据块实时返回给客户端，实现 “边生成边展示” 的流式效果
-                    yield f"data: {chunk}\n\n"
+                    yield chunk
             except Exception as e:
                 # 流式响应内部异常处理
                 error_msg = f"MCP服务初始化失败：{str(e)}"
-                yield f"data: {BasicResponse(code=500, message=error_msg, data={}).model_dump_json()}\n\n"
+                yield BasicResponse(code=500, message=error_msg, data={}).model_dump_json()
 
         # Server-Sent Events (SSE) sse 对话流式输出，实时数据流
         return StreamingResponse(
@@ -98,7 +98,7 @@ async def chat(req: RequestForChat) -> StreamingResponse:
         print(traceback.format_exc())
         # 异常时仍返回流式响应（符合前端统一处理逻辑）
         async def global_error_generator():
-            yield f"data: {BasicResponse(code=500, message=error_msg, data={}).model_dump_json()}\n\n"
+            yield BasicResponse(code=500, message=error_msg, data={}).model_dump_json()
         return StreamingResponse(global_error_generator(), media_type="text/event-stream", status_code=500)
 
 
