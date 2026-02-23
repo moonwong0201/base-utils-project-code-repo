@@ -23,6 +23,19 @@ from config import (
     DB_PATH
 )
 
+import logging
+import sys
+
+# 配置日志输出到控制台
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)  # 确保输出到stdout
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # """
 # 聊天业务的核心服务层，承接 routers/chat.py 接口的请求，
 # 整合了「会话管理、AI Agent 调度、工具调用、数据库持久化」四大核心能力，
@@ -73,6 +86,7 @@ def get_init_message(
 3. **在提供分析时，必须清晰地说明数据来源、分析模型的局限性，并强调你的意见不构成最终的投资建议。**
 4. 仅基于公开市场数据和合理的财务假设进行分析，禁止进行内幕交易或非公开信息的讨论。
 5. 结果要求：提供结构化的分析（如：公司概览、财务健康度、估值模型、风险与机遇）。
+6. 凡是涉及股票相关的问题，必须要优先调用工具，不可以凭记忆回答。
 """
     elif task == "数据BI":
         task_description = """
@@ -202,6 +216,7 @@ async def chat(user_name: str, session_id: Optional[str], task: Optional[str], c
 
     # 分支1：不调用工具 → 直接调用大模型流式回答
     if not tools or len(tools) == 0:
+        logger.info(f"[DEBUG] 没有进入工具分支，大模型回答")
         try:
             agent = Agent(
                 name="Assistant",
@@ -221,18 +236,19 @@ async def chat(user_name: str, session_id: Optional[str], task: Optional[str], c
                 if event.type == "raw_response_event":
                     if isinstance(event.data, ResponseTextDeltaEvent):  # 如果是大模型的回答
                         if event.data.delta:
-                            yield f"{event.data.delta}"  # 流式返回给前端（SSE）
+                            yield f"data: {event.data.delta}\n\n"  # 流式返回给前端（SSE）
                             assistant_message += event.data.delta
 
             # 存储AI回复到数据库
             append_message2db(session_id, "assistant", assistant_message)
         except Exception as e:
             error_msg = f"大模型调用失败：{str(e)}"
-            yield error_msg
+            yield f"data: {error_msg}\n\n"
             append_message2db(session_id, "assistant", error_msg)
 
     # 分支2：调用MCP工具 → 先调用工具，再返回结果（或让大模型总结）
     else:
+        logger.info(f"[DEBUG] 进入工具分支，tools={tools}")
         try:
             async with mcp_server:
                 # 判定工具类型：可视化工具（直接返回结果）/其他工具（大模型总结）
@@ -259,32 +275,57 @@ async def chat(user_name: str, session_id: Optional[str], task: Optional[str], c
 
                 assistant_message = ""
                 current_tool_name = ""
+                tool_displayed = False
                 async for event in result.stream_events():
-                    # if event.type == "run_item_stream_event" and hasattr(event, 'name') and event.name == "tool_output" and current_tool_name not in need_viz_tools:
-                    #     yield event.item.raw_item["output"]
-                    #     assistant_message += event.item.raw_item["output"]
+                    # logger.info(f"[DEBUG] event.type = {event.type}")
+                    if event.type == "run_item_stream_event":
 
-                    # tool_output
+                        # logger.info(f"[DEBUG] run_item_stream_event: {event.item}")
+                        if hasattr(event, "item") and hasattr(event.item, "name") and not tool_displayed:
+                            tool_block = f"\n```json\n{event.item.name}:{getattr(event.item, 'arguments', '{}')}\n```\n\n"
+                            yield f"data: {tool_block}\n\n"
+                            assistant_message += tool_block
+                            tool_displayed = True
 
                     # 工具调用结果：返回工具名+参数（JSON格式）
-                    if event.type == "raw_response_event" and hasattr(event, 'data') and isinstance(event.data, ResponseOutputItemDoneEvent):
-                        if isinstance(event.data.item, ResponseFunctionToolCall):
-                            current_tool_name = event.data.item.name
+                    elif event.type == "raw_response_event":
+                        data = event.data
+                        # logger.info(f"[DEBUG] raw_response_event data type: {type(data).__name__}")
+                        if isinstance(data, ResponseOutputItemDoneEvent):
+                            # logger.info(f"[DEBUG] ResponseOutputItemDoneEvent item type: {type(data.item).__name__}")
+                            if isinstance(data.item, ResponseFunctionToolCall) and not tool_displayed:
+                                # logger.info(f"[DEBUG] 发现 ResponseFunctionToolCall: {data.item.name}")
+                                logger.info(f"[DEBUG] 准备发送工具信息: {data.item.name}")
+                                tool_block = f"\n```json\n{data.item.name}:{data.item.arguments}\n```\n\n"
+                                # logger.info(f"[DEBUG] tool_block: {repr(tool_block)}")
+                                # yield f"data: {tool_block}\n\n"
 
-                            # 工具名字、工具参数
-                            yield "\n```json\n" + event.data.item.name + ":" + event.data.item.arguments + "\n" + "```\n\n"
-                            assistant_message += "\n```json\n" + event.data.item.name + ":" + event.data.item.arguments + "\n" + "```\n\n"
+                                tool_payload = {
+                                    "type": "tool_call",
+                                    "name": data.item.name,
+                                    "arguments": data.item.arguments
+                                }
 
-                    # 大模型总结结果：流式返回文本
-                    if event.type == "raw_response_event" and hasattr(event, 'data') and isinstance(event.data, ResponseTextDeltaEvent):
-                        yield event.data.delta
-                        assistant_message += event.data.delta
+                                yield f"data: {json.dumps(tool_payload, ensure_ascii=False)}\n\n"
+                                assistant_message += tool_block
+                                tool_displayed = True
+                                logger.info(f"[DEBUG] 工具信息已发送")
+                            # else:
+                            #     logger.info(f"[DEBUG] 其他 item 类型: {type(data.item).__name__}")
+
+                        elif isinstance(data, ResponseTextDeltaEvent):
+                            # logger.info(f"[DEBUG] ResponseTextDeltaEvent: {data.delta[:20]}...")
+                            if data.delta:
+                                yield f"data: {data.delta}\n\n"
+                                assistant_message += data.delta
+                        # else:
+                        #     logger.info(f"[DEBUG] 其他 data 类型: {type(data).__name__}")
 
                 # 存储AI+工具的回复到数据库
                 append_message2db(session_id, "assistant", assistant_message)
         except Exception as e:
             error_msg = f"工具调用失败：{str(e)}"
-            yield error_msg
+            yield f"data: {error_msg}\n\n"
             append_message2db(session_id, "assistant", error_msg)
 
 
