@@ -154,5 +154,12 @@ streamlit run demo/streamlit_demo.py
 工具展示：  
 ![侧边栏](side_bar.jpg)
 
-对话展示：
-![展示](展示.jpg)
+日k线图：
+![](日k线图.jpg)
+
+#### 对话展示： 
+股票搜索：  
+![股票搜索](股票搜索.jpg)  
+
+新闻：  
+![新闻](新闻.jpg)
