@@ -38,4 +38,4 @@
 | 深度学习（序列模型） | LSTM（长短期记忆网络） | PyTorch/TensorFlow | 捕捉文本序列依赖、长文本 |
 | 预训练语言模型 | BERT | Hugging Face Transformers | 高精度需求、充足算力、各类文本场景 |
 | 大模型提示词分类 | 通义千问 | 大模型API服务、提示词工程 | 少样本/零样本分类任务 |
-| 预训练语言模型 | RoBERTa（优化版BERT） | Hugging Face Transformers | 比BERT更高的精度、充足算力 |
+| 预训练语言模型 | Lora微调 | Hugging Face Transformers | 比BERT更高的精度、充足算力 |
