@@ -19,6 +19,7 @@ import numpy as np
 import uuid   # 生成唯一的“请求ID”（方便追踪每个用户请求）
 import datetime
 import traceback  # 捕获并打印异常详情
+from es_api import es
 
 # 导入Web服务相关库
 import uvicorn  # 运行FastAPI服务的服务器
@@ -58,23 +59,21 @@ def get_knowledge_base(knowledge_id: int) -> KnowledgeResponse:
     start_time = time.time()  # 记录接口开始时间（用于计算处理耗时）
 
     try:
-        # 重试10次查询数据库（防止临时网络/数据库连接问题）
-        for retry_time in range(10):
-            with Session() as session:  # 创建数据库会话（自动管理连接，结束后关闭）
-                # 数据库查询：从“KnowledgeDatabase表”里，找“knowledge_id等于传入参数”的第一条记录
-                record = session.query(KnowledgeDatabase).filter(KnowledgeDatabase.knowledge_id == knowledge_id).first()
-                if record is not None:   # 如果找到这条记录（知识库存在）
-                    # 返回符合“KnowledgeResponse”格式的结果
-                    return KnowledgeResponse(     # type: ignore
-                        request_id=str(uuid.uuid4()),   # 生成唯一请求ID（用于追踪）
-                        knowledge_id=knowledge_id,      # 要查的知识库ID
-                        title=str(record.title),        # 知识库标题
-                        category=str(record.category),  # 知识库分类
-                        response_code=200,              # 成功状态码
-                        response_msg="知识库查询成功",    # 提示信息
-                        process_status="completed",     # 处理状态
-                        processing_time=time.time() - start_time  # 计算耗时
-                    )
+        with Session() as session:  # 创建数据库会话（自动管理连接，结束后关闭）
+            # 数据库查询：从“KnowledgeDatabase表”里，找“knowledge_id等于传入参数”的第一条记录
+            record = session.query(KnowledgeDatabase).filter(KnowledgeDatabase.knowledge_id == knowledge_id).first()
+            if record is not None:   # 如果找到这条记录（知识库存在）
+                # 返回符合“KnowledgeResponse”格式的结果
+                return KnowledgeResponse(     # type: ignore
+                    request_id=str(uuid.uuid4()),   # 生成唯一请求ID（用于追踪）
+                    knowledge_id=knowledge_id,      # 要查的知识库ID
+                    title=str(record.title),        # 知识库标题
+                    category=str(record.category),  # 知识库分类
+                    response_code=200,              # 成功状态码
+                    response_msg="知识库查询成功",    # 提示信息
+                    process_status="completed",     # 处理状态
+                    processing_time=time.time() - start_time  # 计算耗时
+                )
     except Exception as e:  # 如果过程中出错（比如数据库连不上）
         logger.error(f"查询知识库失败！knowledge_id={knowledge_id}, error={traceback.format_exc()}")
 
@@ -175,9 +174,9 @@ def add_knowledge_base(req: KnowledgeRequest) -> KnowledgeResponse:
         knowledge_id=0,
         category="",
         title="",
-        response_code=504,
+        response_code=500,
         response_msg="知识库插入失败",
-        process_status="completed",
+        process_status="failed",
         processing_time=time.time() - start_time
     )
 
@@ -286,46 +285,72 @@ async def add_document(
     background_tasks: BackgroundTasks = BackgroundTasks()  # 后台任务工具 异步的体现
 ) -> DocumentResponse:
     start_time = time.time()
-    response_msg ="新增文档失败"
+    response_msg = "新增文档失败"
+    document_id = None  # 提前声明，异常处理用
+
     try:
-        for retry_time in range(10):
+        with Session() as session:
+            # 检查是否有同路径的脏数据，先清理
             with Session() as session:
-                # 第一步：先检查“文档要放的知识库是否存在”（不能往不存在的知识库传文件）
-                record = session.query(KnowledgeDatabase).filter(KnowledgeDatabase.knowledge_id == knowledge_id).first()
-                if record is None:
-                    response_msg = "知识库不存在，请提前创建"
-                    break
+                old_doc = session.query(KnowledgeDocument).filter(
+                    KnowledgeDocument.file_path.like(f"%/document_id_%_{file.filename}")
+                ).first()
 
-                # 第二步：创建“文档记录”（存文档的基本信息，还没存文件内容）
-                record = KnowledgeDocument(
-                    title=title,
-                    category=category,
-                    knowledge_id=knowledge_id,  # 关联到对应的知识库
-                    file_path="",   # 暂时为空，后面存完文件再更新
-                    file_type=file.content_type,   # 文件类型（如application/pdf）
-                    create_dt=datetime.datetime.now(),
-                    update_dt=datetime.datetime.now(),
+                if old_doc and old_doc.status != "completed":
+                    # 删除脏数据
+                    session.delete(old_doc)
+                    session.commit()
+                    logger.info(f"清理脏数据: document_id={old_doc.document_id}")
+
+            # 第一步：先检查“文档要放的知识库是否存在”（不能往不存在的知识库传文件）
+            record = session.query(KnowledgeDatabase).filter(KnowledgeDatabase.knowledge_id == knowledge_id).first()
+            if record is None:
+                return DocumentResponse(
+                    request_id=str(uuid.uuid4()),
+                    document_id=0,
+                    category="",
+                    title="",
+                    knowledge_id=0,
+                    file_type="",
+                    response_code=404,
+                    response_msg="知识库不存在，请提前创建",
+                    process_status="failed",
+                    processing_time=time.time() - start_time
                 )
-                session.add(record)
-                # 生成document_id
-                session.flush()  # Flushes changes to generate primary key if using autoincrement
-                document_id = record.document_id
-                session.commit()
 
-                # 第三步：保存上传的文件到本地（比如存到upload_files文件夹）
-                # 文件名规则：document_id_原文件名（避免重名，比如两个都叫“手册.pdf”，用ID区分）
-                file_path = f"upload_files/document_id_{document_id}_" + file.filename
-                with open(file_path, "wb") as buffer:  # “wb”=二进制写入（文件都是二进制）
-                    buffer.write(file.file.read())  # 读取上传的文件内容，写入本地文件
+            # 第二步：创建“文档记录”（存文档的基本信息，还没存文件内容）
+            record = KnowledgeDocument(
+                title=title,
+                category=category,
+                knowledge_id=knowledge_id,  # 关联到对应的知识库
+                file_path="",   # 暂时为空，后面存完文件再更新
+                file_type=file.content_type,   # 文件类型（如application/pdf）
+                status="pending",
+                create_dt=datetime.datetime.now(),
+                update_dt=datetime.datetime.now(),
+            )
+            session.add(record)
+            # 生成document_id
+            session.flush()  # Flushes changes to generate primary key if using autoincrement
+            document_id = record.document_id
+            session.commit()
 
-                # 第四步：更新“文档记录”的file_path（把本地文件路径存到数据库）
-                record = session.query(KnowledgeDocument).filter(KnowledgeDocument.document_id == document_id).first()
-                record.file_path = file_path  # 更新路径
-                session.commit()  # 提交更新
+            # 第三步：保存上传的文件到本地（比如存到upload_files文件夹）
+            # 文件名规则：document_id_原文件名（避免重名，比如两个都叫“手册.pdf”，用ID区分）
+            file_path = f"upload_files/document_id_{document_id}_" + file.filename
+            with open(file_path, "wb") as buffer:  # “wb”=二进制写入（文件都是二进制）
+                buffer.write(file.file.read())  # 读取上传的文件内容，写入本地文件
+
+            # 第四步：更新“文档记录”的file_path（把本地文件路径存到数据库）
+            record = session.query(KnowledgeDocument).filter(KnowledgeDocument.document_id == document_id).first()
+            record.file_path = file_path  # 更新路径
+            record.status = "parsing"   # 开始解析
+            session.commit()  # 提交更新
 
             # 第五步：后台处理“文件内容提取”（耗时操作，比如解析PDF里的文字，不用让用户等）
             background_tasks.add_task(
-                RAG().extract_content,  # 后台运行的函数名（提取文件内容并生成嵌入）
+                process_document_async,
+                # RAG().extract_content,  # 后台运行的函数名（提取文件内容并生成嵌入）
                 knowledge_id=knowledge_id,  # 以下都是函数的参数
                 document_id=document_id,
                 title=title,
@@ -343,12 +368,25 @@ async def add_document(
                 file_type=file.content_type,
                 response_code=200,
                 response_msg="文档添加成功",
-                process_status="completed",
+                process_status="parsing",  # 正在解析
                 processing_time=time.time() - start_time
             )
     except Exception as e:
         # print(traceback.format_exc())
         logger.error(f"新增文档失败！knowledge_id={knowledge_id}, title={title}, error={traceback.format_exc()}")
+        # 如果已创建记录但失败，尝试标记为failed
+        if document_id:
+            try:
+                with Session() as session:
+                    doc = session.query(KnowledgeDocument).filter(
+                        KnowledgeDocument.document_id == document_id
+                    ).first()
+                    if doc:
+                        doc.status = "failed"
+                        doc.error_msg = f"上传阶段失败: {str(e)[:200]}"
+                        session.commit()
+            except:
+                pass  # 忽略清理失败的错误
 
     return DocumentResponse(   # type: ignore
         request_id=str(uuid.uuid4()),
@@ -362,6 +400,79 @@ async def add_document(
         process_status="completed",
         processing_time=time.time() - start_time
     )
+
+
+# 后台任务包装函数
+def process_document_async(knowledge_id, document_id, title, file_type, file_path):
+    """包装RAG解析，带状态更新"""
+    error_msg = ""
+    try:
+        if not es.ping():
+            raise Exception("ES未启动，无法解析")
+
+        logger.info(f"开始解析文档: document_id={document_id}")
+        # 调用原有解析逻辑
+        RAG().extract_content(knowledge_id, document_id, title, file_type, file_path)
+
+        status = "completed"
+        logger.info(f"文档解析完成: document_id={document_id}")
+
+    except Exception as e:
+        status = "failed"
+        error_msg = str(e)[:500]
+        logger.error(f"文档解析失败: document_id={document_id}, error={e}")
+
+    # 统一更新数据库状态
+    try:
+        with Session() as session:
+            record = session.query(KnowledgeDocument).filter(
+                KnowledgeDocument.document_id == document_id
+            ).first()
+            if record:
+                record.status = status
+                record.error_msg = error_msg
+                record.update_dt = datetime.datetime.now()
+                session.commit()
+    except Exception as db_error:
+        # 数据库更新失败
+        logger.error(f"更新文档状态失败: document_id={document_id}, error={db_error}")
+
+
+# 状态查询接口
+@app.get("/v1/document/{document_id}/status")
+def get_document_status(document_id: int):
+    """查询文档解析状态"""
+    try:
+        with Session() as session:
+            record = session.query(KnowledgeDocument).filter(
+                KnowledgeDocument.document_id == document_id
+            ).first()
+
+            if not record:
+                return {
+                    "request_id": str(uuid.uuid4()),
+                    "document_id": document_id,
+                    "status": "not_found",
+                    "error_msg": "文档不存在",
+                    "response_code": 404
+                }
+
+            return {
+                "request_id": str(uuid.uuid4()),
+                "document_id": document_id,
+                "status": record.status,  # pending/parsing/completed/failed
+                "error_msg": record.error_msg if record.status == "failed" else "",
+                "response_code": 200
+            }
+    except Exception as e:
+        logger.error(f"查询状态失败: {e}")
+        return {
+            "request_id": str(uuid.uuid4()),
+            "document_id": document_id,
+            "status": "error",
+            "error_msg": "查询失败",
+            "response_code": 500
+        }
 
 
 # 语义嵌入接口
@@ -382,7 +493,7 @@ async def semantic_embedding(req: EmbeddingRequest) -> EmbeddingResponse:
         request_id=str(uuid.uuid4()),
         vector=vector.astype(float).tolist(),  # 向量转为列表返回（方便JSON序列化）
         response_code=200,
-        response_msg="ok",
+        response_msg="语义嵌入成功",
         process_status="completed",
         processing_time=time.time() - start_time
     )
@@ -401,7 +512,7 @@ async def semantic_rerank(req: RerankRequest) -> RerankResponse:
         request_id=str(uuid.uuid4()),
         vector=vector.astype(float).tolist(),  # 分数转为列表返回
         response_code=200,
-        response_msg="ok",
+        response_msg="重排序成功",
         process_status="completed",
         processing_time=time.time() - start_time
     )
@@ -420,7 +531,7 @@ def chat(req: RAGRequest) -> RAGResponse:
         request_id=str(uuid.uuid4()),
         message=message,   # 生成的回答
         response_code=200,
-        response_msg="ok",
+        response_msg="回答成功",
         process_status="completed",
         processing_time=time.time() - start_time
     )
