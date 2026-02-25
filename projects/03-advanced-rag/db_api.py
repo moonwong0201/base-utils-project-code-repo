@@ -108,6 +108,11 @@ class KnowledgeDocument(Base):
         back_populates="documents"  # 对应知识库表中的'documents'字段
     )
 
+    # 解析状态
+    status = Column(String, default="pending")  # pending/parsing/completed/failed
+    error_msg = Column(String, default="")      # 失败原因
+
+
 
 # 创建所有表（如果表不存在）
 # 解释：Base.metadata包含了所有继承自Base的表结构，create_all会根据这些结构在数据库中创建表
