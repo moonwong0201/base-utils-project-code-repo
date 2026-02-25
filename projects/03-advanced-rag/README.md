@@ -151,15 +151,16 @@ Content-Type: application/json
 
 ## 核心接口说明
 
-|       接口路径       | 请求方法 |    功能    |              核心参数               |
-| :------------------: | :------: | :--------: | :---------------------------------: |
-| `/v1/knowledge_base` |   GET    | 查询知识库 |         knowledge_id、token         |
-| `/v1/knowledge_base` |   POST   | 新增知识库 |           category、title           |
-| `/v1/knowledge_base` |  DELETE  | 删除知识库 |         knowledge_id、token         |
-|    `/v1/document`    |   GET    |  查询文档  |         document_id、token          |
-|    `/v1/document`    |   POST   |  上传文档  | knowledge_id、title、category、file |
-|    `/v1/document`    |  DELETE  |  删除文档  |         document_id、token          |
-|       `/chat`        |   POST   |  RAG 聊天  |        knowledge_id、message        |
+|                接口路径                 | 请求方法 |    功能    |              核心参数               |
+| :-------------------------------------: | :------: | :--------: | :---------------------------------: |
+|          `/v1/knowledge_base`           |   GET    | 查询知识库 |         knowledge_id、token         |
+|          `/v1/knowledge_base`           |   POST   | 新增知识库 |           category、title           |
+|          `/v1/knowledge_base`           |  DELETE  | 删除知识库 |         knowledge_id、token         |
+|             `/v1/document`              |   GET    |  查询文档  |         document_id、token          |
+|             `/v1/document`              |   POST   |  上传文档  | knowledge_id、title、category、file |
+| ```/v1/document/{document_id}/status``` |   GET    |  状态查询  |             document_id             |
+|             `/v1/document`              |  DELETE  |  删除文档  |         document_id、token          |
+|                 `/chat`                 |   POST   |  RAG 聊天  |        knowledge_id、message        |
 
 ## 项目可用性验证 
 
@@ -229,7 +230,11 @@ Content-Type: application/json
 
 ## 优化
 
-针对 RAG 问答做了两个优化：**```query_parse``` 查询解析** 和 **```query_rewrite``` 查询重写**
+针对 RAG 问答做了三个优化：
 
-- ```query_parse``` 查询解析：对于用户的提问先调用 LLM 进行意图识别和关键词的提取，能够在 RAG 问答时让模型更容易理解用户提问，从而给出更加精准的答案。如果关键词提取失败，有 jieba 分词并删除助词等进行兜底操作，该操作可由用户选择是否使用；
-- ```query_rewrite``` 查询重写：对于用户提问过于模糊的情况，调用 LLM 并传入相关知识库的主题，让模型对用户提问进行修改，让提问更加准确。
+- ```query_parse``` **查询解析**：对于用户的提问先调用 LLM 进行意图识别和关键词的提取，能够在 RAG 问答时让模型更容易理解用户提问，从而给出更加精准的答案。如果关键词提取失败，有 jieba 分词并删除助词等进行兜底操作，该操作可由用户选择是否使用；
+- ```query_rewrite``` **查询重写**：对于用户提问过于模糊的情况，调用 LLM 并传入相关知识库的主题，让模型对用户提问进行修改，让提问更加准确。
+- 文档解析是CPU密集型操作，大文件可能耗时几十秒。设计了**异步状态机制**：
+  - 上传接口立即返回 `document_id` + `parsing` 状态，不阻塞用户
+  - 后台任务**流式处理**PDF，逐页提取 + 向量化
+  - 用户通过状态接口实时查看进度，终态有`completed`/`failed`两种
