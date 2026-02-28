@@ -1,6 +1,6 @@
 import datetime
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, Index, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -19,7 +19,7 @@ class Product(Base):
     )
 
     milvus_primary_key = Column(Integer, nullable=True)
-
+    is_synced = Column(Boolean, default=False)  # 是否已同步到 Milvus
     __table_args__ = (
         Index('idx_title', 'title'),
     )
