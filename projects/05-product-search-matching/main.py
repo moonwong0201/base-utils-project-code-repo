@@ -1,6 +1,12 @@
+"""
+搭建了一个 FastAPI Web 服务，核心实现了两大模块功能，完全覆盖项目的 A1-A4 需求（A5 文生图仅预留接口）：
+· 商品基础管理接口：实现商品的创建、查询列表、查询详情、更新标题 / 图片、删除，保证商品数据在 SQL 数据库、Milvus、本地图片目录的同步。
+· 跨模态检索接口：实现文本搜文本、文本搜图片、图片搜文本、图片搜图四种检索模式，返回按相似度排序的结果。
+· 附加功能：服务健康检查接口，用于监控服务运行状态。
+"""
 import base64
 import os.path
-
+import uvicorn
 from fastapi import FastAPI, Form, File, UploadFile, HTTPException
 from fastapi import Depends, Query
 import time
@@ -9,6 +15,9 @@ import traceback
 from PIL import Image
 from io import BytesIO
 
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
 from sqlalchemy import create_engine
 from sqlalchemy import desc
 from sqlalchemy.orm import sessionmaker
@@ -16,10 +25,14 @@ from sqlalchemy.orm import sessionmaker
 from orm_models import create_tables, Product
 
 from vector_db import insert_product_, delete_product_, search_product_
-
+import vector_db
 from data_models import BasicResponse, BasicRequest, SearchRequest
 
 from config import DATABASE_URL, IMAGE
+from functools import partial
+
+# 全局线程池
+executor = ThreadPoolExecutor(max_workers=4)
 
 start_time = time.time()
 
@@ -55,6 +68,8 @@ async def health_check():
         "status": "healthy",
         "service": "Product Search and Matching Service",
         "uptime": f"{uptime: .2f} second",
+        # 调用 Milvus 客户端的list_collections()方法，返回所有集合列表，若能正常返回则说明 Milvus 连接正常
+        "milvus": vector_db.client.list_collections()
     }
 
 
@@ -64,6 +79,17 @@ async def create_product(
         image: UploadFile = File(...),
         db=Depends(get_db)
 ):
+    """
+    接收商品标题和图片，完成 “保存图片→插入 Milvus→插入 SQL 数据库” 的全流程，
+    返回创建结果（使用form表单提交）
+    Args:
+        title: 商品标题（form字段）
+        image: 商品图片文件（文件上传字段，支持jpg、png等格式）
+        db: 数据库会话
+
+    Returns:
+        创建的商品信息
+    """
     try:
         if not image.content_type.startswith("image/"):
             raise HTTPException(
@@ -82,22 +108,38 @@ async def create_product(
 
         insert_result, milvus_primary_key = insert_product_(image_path, title)
 
-        db_product = Product(
-            title=title,
-            image_path=image_path,
-            milvus_primary_key=milvus_primary_key
-        )
+        if insert_result:
+            # 关系型数据库：创建商品实例，使用相对路径存储
+            db_product = Product(
+                title=title,
+                image_path=image_path,
+                milvus_primary_key=milvus_primary_key,
+                is_synced=True  # 标记已同步
+            )
+            message = "商品创建成功"
+        else:
+            db_product = Product(
+                title=title,
+                image_path=image_path,
+                milvus_primary_key=-1,
+                is_synced=False  # 标记未同步
+            )
+            message = "商品创建成功，但向量同步失败，将异步重试"
 
-        db.add(db_product)
+        # 保存到数据库
+        db.add(db_product)  # 将实例添加到数据库会话
         db.commit()
+
+        # 从数据库中重新加载最新的商品数据，更新当前内存中的 db_product 对象
         db.refresh(db_product)
 
         return BasicResponse(
             status=200,
-            message="商品创建成功",
+            message=message,
             data={
                 "id": db_product.id,
-                "create_at": db_product.created_at
+                "create_at": db_product.created_at,
+                "is_synced": db_product.is_synced
             }
         )
     except Exception as e:
@@ -110,20 +152,33 @@ async def create_product(
 
 @app.get("/product/list", response_model=BasicResponse)
 async def list_products(
-        page_index:int = Query(1, description="页码（从 1 开始）", ge=1),
+        page_index: int = Query(1, description="页码（从 1 开始）", ge=1),
         page_size: int = Query(10, description="每页商品条数", ge=1, le=100),
         db=Depends(get_db)
 ):
+    """
+    获取所有商品列表（支持分页+排序）
+
+    Args:
+        page_index: 查询页面的大小（默认1，最小1）
+        page_size: 具体查询的页面（默认10，最小1，最大100）
+        order: 排序逻辑（默认created_at_desc：按插入时间倒序）
+        db: 数据库会话
+
+    Returns:
+        包含分页商品信息、总条数、总页数的结果
+    """
     try:
         sort_func = desc(Product.created_at)
 
         offset_num = (page_index - 1) * page_size
 
-        query = db.query(
-            Product.id, Product.title, Product.image_path,
-            Product.created_at, Product.updated_at,
-            Product.milvus_primary_key
-        )
+        # query = db.query(
+        #     Product.id, Product.title, Product.image_path,
+        #     Product.created_at, Product.updated_at,
+        #     Product.milvus_primary_key
+        # )
+        query = db.query(Product).filter(Product.is_synced == True)
 
         query = query.order_by(sort_func)
         query = query.offset(offset_num)
@@ -331,6 +386,27 @@ def remove_product(product_id: int, db=Depends(get_db)):
 
 @app.post("/product/search", response_model=BasicResponse)
 async def search_product(search_request: SearchRequest, db=Depends(get_db)):
+    """
+    支持四种跨模态检索模式，返回按相似度排序的商品结果，是项目核心业务接口
+    支持四种搜索模式：
+    1. text2text: 文本搜索文本
+    2. text2image: 文本搜索图片
+    3. image2text: 图片搜索文本
+    4. image2image: 图片搜索图片
+
+    Args:
+        search_request: 搜索请求参数，包含搜索类型、查询内容和返回数量
+        db: 数据库会话
+
+    Returns:
+        搜索结果列表，按相似度排序
+
+    Raises:
+        HTTPException: 当请求参数无效时返回400错误
+    """
+    # 在线程池中执行同步的模型推理
+    loop = asyncio.get_event_loop()
+
     valid_search_types = ["text2text", "text2image", "image2text", "image2image"]
 
     if search_request.search_type not in valid_search_types:
@@ -370,21 +446,32 @@ async def search_product(search_request: SearchRequest, db=Depends(get_db)):
             )
 
     try:
-        success = False
-        results = []
         if search_request.search_type in ["text2text", "text2image"]:
-            success, results = search_product_(
+            # 【文本搜索】把 vector_db.search_product 放到线程池
+            search_func = partial(
+                vector_db.search_product_,
                 title=search_request.query_text,
-                top_k=search_request.top_k,
-                task=search_request.search_type
+                image=None,
+                task=search_request.search_type,
+                top_k=search_request.top_k
             )
+            success, results = await loop.run_in_executor(executor, search_func)
         elif search_request.search_type in ["image2text", "image2image"]:
-            image = Image.open(BytesIO(base64.b64decode(search_request.query_image)))
-            success, results = search_product_(
+            # 【图片搜索】分两步：Base64解码（同步，但很快）+ 推理（线程池）
+
+            # 1. Base64解码（同步，数据小，不阻塞太久）
+            image_bytes = base64.b64decode(search_request.query_image)
+            image = Image.open(BytesIO(image_bytes))
+
+            # 2. 模型推理（放到线程池，避免阻塞）
+            search_func = partial(
+                vector_db.search_product_,
                 image=image,
-                top_k=search_request.top_k,
-                task=search_request.search_type
+                title=None,
+                task=search_request.search_type,
+                top_k=search_request.top_k
             )
+            success, results = await loop.run_in_executor(executor, search_func)
 
         if not success:
             return BasicResponse(
@@ -430,39 +517,11 @@ async def search_product(search_request: SearchRequest, db=Depends(get_db)):
             data=None
         )
 
-
 if __name__ == "__main__":
-    test_title = "测试皮卡丘"
-    test_image_path = "/Users/wangyingyue/materials/大模型学习资料——八斗/第十一周：多模态检索与问答/Week11/05-product-search-matching/pokemon.jpeg"
-
-    # 2. 手动创建数据库会话
-    db = SessionLocal()
-
-    try:
-        # 模拟保存图片（和接口逻辑一致）
-        file_extension = test_image_path.split(".")[-1]
-        unique_filename = str(uuid.uuid4()) + f".{file_extension}"
-        image_path = os.path.join(IMAGE_DIR, unique_filename)
-        with open(test_image_path, "rb") as f_in, open(image_path, "wb") as f_out:
-            f_out.write(f_in.read())
-
-        # 3. 直接调用insert_product（重点：这里加断点）
-        insert_result, milvus_primary_key = insert_product_(image_path, test_title)
-        print(f"Milvus主键: {milvus_primary_key}")  # 打印主键，看是否为空
-
-        # 4. 写入数据库
-        db_product = Product(
-            title=test_title,
-            image_path=image_path,
-            milvus_primary_key=milvus_primary_key
-        )
-        db.add(db_product)
-        db.commit()
-        db.refresh(db_product)
-
-        print(f"商品创建成功，ID: {db_product.id}, Milvus主键: {db_product.milvus_primary_key}")
-    except Exception as e:
-        db.rollback()
-        print(f"测试失败: {str(e)}")
-    finally:
-        db.close()
+    # 用uvicorn运行FastAPI服务
+    uvicorn.run(
+        app,  # 要运行的API实例
+        host="127.0.0.1",  # 允许所有设备访问（比如同一局域网的电脑能访问）
+        port=8000,  # 端口号从配置文件拿（比如8000）
+    )
+    
