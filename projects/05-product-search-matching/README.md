@@ -133,6 +133,11 @@ streamlit run web_demo.py
 locust -f locustfile.py --host=http://localhost:8000 -u 50 -r 10 --run-time 60s --headless
 ```
 
+#### 优化
+
+- **问题**：同步实现下，模型推理阻塞主线程，多请求排队等待，并发能力极差
+- **方案**：用 `ThreadPoolExecutor` 将 CPU 密集型模型推理放到后台线程，主线成只处理网络网络 IO，避免阻塞事件循环
+
 #### 三轮压测对比
 
 | 轮次 | 测试条件                 | 平均延迟 | P95     | 吞吐量   | 总请求 | 关键特征                     |
@@ -153,4 +158,4 @@ locust -f locustfile.py --host=http://localhost:8000 -u 50 -r 10 --run-time 60s 
 | 错误率       | 0%         | 0%         | 稳定  |
 | 并发处理能力 | 单用户阻塞 | 50用户流畅 |       |
 
-用 `ThreadPoolExecutor` 将 CPU 密集型模型推理从主线程解耦，避免阻塞事件循环。
+压测验证得出，50 并发下吞吐量从 1.7QPS 提升到 44QPS，并发能力提升 25 倍。
