@@ -7,16 +7,17 @@
 import base64
 import os.path
 import uvicorn
-from fastapi import FastAPI, Form, File, UploadFile, HTTPException
+from fastapi import FastAPI, Form, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi import Depends, Query
 import time
 import uuid
 import traceback
 from PIL import Image
 from io import BytesIO
-
+import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
+import requests
 
 from sqlalchemy import create_engine
 from sqlalchemy import desc
@@ -24,12 +25,27 @@ from sqlalchemy.orm import sessionmaker
 
 from orm_models import create_tables, Product
 
-from vector_db import insert_product_, delete_product_, search_product_
+from vector_db import (
+    insert_product_, insert_products_batch, delete_product_,
+    delete_collection, create_collection
+)
 import vector_db
 from data_models import BasicResponse, BasicRequest, SearchRequest
 
-from config import DATABASE_URL, IMAGE
+from config import DATABASE_URL, SAVE_IMAGE, IMAGE, INFORMATION
 from functools import partial
+
+import logging
+import sys
+# 配置日志输出到控制台
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)  # 确保输出到stdout
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # 全局线程池
 executor = ThreadPoolExecutor(max_workers=4)
@@ -50,7 +66,7 @@ app = FastAPI(
     title="多模态商品管理系统"
 )
 
-IMAGE_DIR = IMAGE
+IMAGE_DIR = SAVE_IMAGE
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 def get_db():
@@ -71,6 +87,161 @@ async def health_check():
         # 调用 Milvus 客户端的list_collections()方法，返回所有集合列表，若能正常返回则说明 Milvus 连接正常
         "milvus": vector_db.client.list_collections()
     }
+
+
+# 重置数据库和Milvus库
+@app.post("/product/reset")
+def reset_product():
+    """
+    重置双库：删除所有数据，重建 Milvus 集合
+    ⚠️ 仅开发/测试环境使用！会清空所有数据！
+    """
+    try:
+        # 删除 SQLite 数据库
+        if os.path.exists(DATABASE_URL.split("///")[-1]):  # SQLite 路径解析
+            os.remove(DATABASE_URL.split("///")[-1])
+
+        # 重新创建 engine
+        engine = create_engine(DATABASE_URL)
+        # 重新绑定 SessionLocal
+        SessionLocal.configure(bind=engine)
+
+        # 重新建 SQLite 表
+        create_tables(engine)
+        logger.info("SQLite表重建成功")
+
+        # 删除 Milvus 集合
+        delete_collection("product_new")
+        # 重建Milvus集合
+        create_collection()
+        logger.info("Milvus集合重建成功")
+
+        return {"status": "reset done"}
+    except Exception as e:
+        logger.error(f"重置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"重置失败: {str(e)}")
+
+
+def do_import(start: int, end: int, batch_size: int = 64):
+    """批量导入，使用 Milvus 批量插入"""
+    try:
+        train = pd.read_csv(INFORMATION, sep="\t")
+
+        # 校验参数合法性
+        if start < 0 or end < 0 or start >= end:
+            logger.error(f"参数错误：start={start}, end={end}")
+            return
+        if end > len(train):
+            logger.warning(f"end={end}超过数据总行数{len(train)}，自动调整为{len(train)}")
+            end = len(train)
+
+        total_processed = 0
+        success = 0
+        fail = 0
+        skip = 0
+
+        # 分批处理
+        batch_paths = []
+        batch_titles = []
+
+        for idx, row in train.iloc[start:end].iterrows():
+            total_processed += 1
+            image_path = os.path.join(IMAGE, row.path)
+
+            if not os.path.exists(image_path):
+                logger.error(f"文件不存在: {image_path}")
+                skip += 1
+                continue
+
+            batch_paths.append(image_path)
+            batch_titles.append(row.title)
+
+            # 达到批次大小，执行批量插入
+            if len(batch_paths) >= batch_size:
+                result, ids = insert_products_batch(batch_paths, batch_titles)
+
+                if result:
+                    # 批量写 SQLite
+                    db = SessionLocal()
+                    try:
+                        for i, (path, title) in enumerate(zip(batch_paths, batch_titles)):
+                            db.add(Product(
+                                title=title,
+                                image_path=path,
+                                milvus_primary_key=ids[i],
+                                is_synced=True
+                            ))
+                        db.commit()
+                        success += len(batch_paths)
+                        logger.info(f"批次导入成功: {len(batch_paths)}条")
+                    except Exception as e:
+                        db.rollback()
+                        fail += len(batch_paths)
+                        logger.error(f"SQLite写入失败: {e}")
+                    finally:
+                        db.close()
+                else:
+                    fail += len(batch_paths)
+                    logger.error(f"Milvus批量插入失败: {len(batch_paths)}条")
+
+                # 清空批次
+                batch_paths = []
+                batch_titles = []
+
+        # 处理剩余不足 batch_size 的数据
+        if batch_paths:
+            result, ids = insert_products_batch(batch_paths, batch_titles)
+
+            if result:
+                db = SessionLocal()
+                try:
+                    for i, (path, title) in enumerate(zip(batch_paths, batch_titles)):
+                        db.add(Product(
+                            title=title,
+                            image_path=path,
+                            milvus_primary_key=ids[i],
+                            is_synced=True
+                        ))
+                    db.commit()
+                    success += len(batch_paths)
+                    logger.info(f"最后批次导入成功: {len(batch_paths)}条")
+                except Exception as e:
+                    db.rollback()
+                    fail += len(batch_paths)
+                    logger.error(f"SQLite写入失败: {e}")
+                finally:
+                    db.close()
+            else:
+                fail += len(batch_paths)
+                logger.error(f"Milvus批量插入失败: {len(batch_paths)}条")
+
+        logger.info(f"导入完成: 总处理{total_processed}条，成功 {success}, 失败 {fail}, 跳过 {skip}")
+
+    except Exception as e:
+        logger.error(f"导入任务失败: {e}")
+        traceback.print_exc()
+
+# 批量导入数据
+
+
+@app.post("/product/batch_import", response_model=BasicResponse)
+def batch_import(
+        background_tasks: BackgroundTasks,
+        start: int,
+        end: int
+):
+    """
+    批量导入训练数据
+    先调用 /product/reset 重置，再调用此接口导入
+    """
+    # 异步执行，避免阻塞接口
+    background_tasks.add_task(do_import, start=start, end=end)
+
+    return BasicResponse(
+        status=200,
+        message="批量导入任务已启动，请在日志中查看进度",
+        data={"status": "running"}
+    )
 
 
 @app.post("/product", response_model=BasicResponse)
@@ -173,11 +344,6 @@ async def list_products(
 
         offset_num = (page_index - 1) * page_size
 
-        # query = db.query(
-        #     Product.id, Product.title, Product.image_path,
-        #     Product.created_at, Product.updated_at,
-        #     Product.milvus_primary_key
-        # )
         query = db.query(Product).filter(Product.is_synced == True)
 
         query = query.order_by(sort_func)
@@ -480,8 +646,8 @@ async def search_product(search_request: SearchRequest, db=Depends(get_db)):
                 data=None
             )
 
-        top_product_ids = [item["primary_key"] for item in results[0]]
-        top_product_distance = [item["distance"] for item in results[0]]
+        top_product_ids = results[0].ids
+        top_product_distance = results[0].distances
 
         top_products = db.query(Product).filter(Product.milvus_primary_key.in_(top_product_ids)).all()
 
@@ -524,4 +690,3 @@ if __name__ == "__main__":
         host="127.0.0.1",  # 允许所有设备访问（比如同一局域网的电脑能访问）
         port=8000,  # 端口号从配置文件拿（比如8000）
     )
-    
