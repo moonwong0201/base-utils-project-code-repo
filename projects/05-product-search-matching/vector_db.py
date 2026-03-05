@@ -39,7 +39,7 @@ from pymilvus import MilvusClient, DataType, FieldSchema, CollectionSchema
 def create_collection():
     """
     重建Milvus的product_new集合（含向量维度、索引配置）
-    适配CLIP(512维) + BGE(512维)双向量
+    适配CLIP(512维) + BGE(384维)双向量
     """
 
     try:
@@ -48,9 +48,9 @@ def create_collection():
             client.drop_collection(COLLECTION_NAME)
             logger.info(f"删除旧集合: {COLLECTION_NAME}")
 
-        # 2. 定义字段
+        # 2. 用 FieldSchema 定义字段
         fields = [
-            # 主键
+            # 主键（自动生成的ID）
             FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
 
             # 三个向量字段
@@ -159,20 +159,20 @@ def insert_product_(image_path: str, title: str):
         # 步骤4：组装要插入Milvus的数据
         data = [
             {
-                "image_clip_vector": image_clip_features,  # CLIP图片向量
-                "text_bge_vector": title_bge_embedding,  # BGE文本向量
-                "text_clip_vector": title_clip_embedding,  # CLIP文本向量
+                "image_clip_vector": image_clip_features,  # CLIP图片向量（512维）
+                "text_bge_vector": title_bge_embedding,  # BGE文本向量（512维）
+                "text_clip_vector": title_clip_embedding,  # CLIP文本向量（512维）
                 "image_path": image_path,  # 图片路径
                 "title": title  # 标题文本
             }
         ]
-        # 调用Milvus客户端的insert方法，插入数据到名为"product_new"的集合
+        # 调用Milvus客户端的insert方法，插入数据到名为"product_new"的集合（表）
         insert_result = client.insert(
             collection_name=COLLECTION_NAME,  # 目标集合名称
-            data=data  # 要插入的数据列表
+            data=data  # 要插入的数据列表（一次可插入多条，此处仅一条）
         )
         # 提取插入数据的主键ID（Milvus自动生成，唯一标识该条向量记录）
-        milvus_primary_key = insert_result["ids"][0]  
+        milvus_primary_key = insert_result["ids"][0]  # "ids" 字段对应「所有插入数据的主键列表」
         logger.info(f"插入成功，主键ID: {milvus_primary_key}")
         logger.info(f"当前索引列表: {client.list_indexes(COLLECTION_NAME)}")
         return True, milvus_primary_key  # 返回成功标识和主键ID
@@ -271,14 +271,16 @@ def search_product_(
 
         if title is not None:
             title_bge_embedding = list(get_text_bge_features([title])[0])
+            title_clip_embedding = list(get_clip_text_features([title])[0])
         else:
             title_bge_embedding = None
+            title_clip_embedding = None
 
         if task in ["text2text"]:
             data = [title_bge_embedding]
             anns_field = "text_bge_vector"
         elif task in ["text2image"]:
-            data = [title_bge_embedding]
+            data = [title_clip_embedding]
             anns_field = "image_clip_vector"
         elif task in ["image2text"]:
             data = [image_clip_features]
