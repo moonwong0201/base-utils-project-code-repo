@@ -189,7 +189,7 @@ async def chat(req: ChatRequest):
     past_msgs = history.get_recent(top_k=5)
 
     # 构造消息
-    messages = [{"role": "system", "content": "请尽量简单回答，10个字以内即可"}]
+    messages = [{"role": "system", "content": "请尽量简单回答"}]
     for msg in past_msgs:
         role = "assistant" if msg.get("role") == "llm" else msg.get("role", "user")
         messages.append({"role": role, "content": msg.get("content", "")})
