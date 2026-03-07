@@ -7,8 +7,9 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import openai
 import asyncio
+from concurrent.futures import ThreadPoolExecutor  # 线程池
 
-from llm_cache import EmbeddingsCache, SemanticCache, SemanticMessageHistory, SemanticRouter
+from llm_cache import EmbeddingsCache, SemanticCache, SemanticMessageHistory, SemanticRouter, SemanticRouter_bert
 import config
 
 import logging
@@ -24,15 +25,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AI 向量检索与智能缓存服务")
+app = FastAPI(title="LLM语义缓存服务")
 
 # 启动时加载，只加载一次
 print("加载Embedding模型...")
 embedding_model = SentenceTransformer(config.EMBEDDING_MODEL_PATH)
 
+# 全局线程池
+executor = ThreadPoolExecutor(max_workers=4)
+
 
 def get_embedding(texts: Union[str, List[str]]) -> np.ndarray:
-    """同步版本，供非异步代码调用"""
     # 强制转列表
     if isinstance(texts, str):
         texts = [texts]
@@ -85,6 +88,15 @@ def get_embedding(texts: Union[str, List[str]]) -> np.ndarray:
     return result
 
 
+async def get_embedding_sync(texts: Union[str, List[str]]) -> np.ndarray:
+    """异步，直接调用同步版本，在线程池执行"""
+    if isinstance(texts, str):
+        texts = [texts]
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, get_embedding, texts)
+
+
 # 初始化4个核心模块
 embed_cache = EmbeddingsCache(
     name="embedding_cache",
@@ -101,7 +113,7 @@ semantic_cache = SemanticCache(
     redis_password=config.REDIS_PASSWORD
 )
 
-router = SemanticRouter(
+router = SemanticRouter_bert(
     name="router",
     embedding_method=get_embedding,
     redis_url=config.REDIS_URL,
@@ -150,10 +162,14 @@ async def chat(req: ChatRequest):
     """
 
     # 1. 意图路由
-    route = router.route(req.message)
+    route = await asyncio.get_event_loop().run_in_executor(
+        executor, router.route, req.message
+    )
 
     # 2. 查语义缓存（相似问题是否问过）
-    cached_answer = semantic_cache.call(req.message)
+    cached_answer = await asyncio.get_event_loop().run_in_executor(
+        executor, semantic_cache.call, req.message
+    )
 
     if cached_answer and len(cached_answer) > 0 and cached_answer[0]:
         return ChatResponse(
@@ -162,7 +178,6 @@ async def chat(req: ChatRequest):
             from_cache=True,
             embedding_hit=True
         )
-
 
     # 3. 没缓存，调用OpenAI
     # 先取历史记录
@@ -174,7 +189,7 @@ async def chat(req: ChatRequest):
     past_msgs = history.get_recent(top_k=5)
 
     # 构造消息
-    messages = [{"role": "system", "content": "请尽量简单回答。"}]
+    messages = [{"role": "system", "content": "请尽量简单回答，10个字以内即可"}]
     for msg in past_msgs:
         role = "assistant" if msg.get("role") == "llm" else msg.get("role", "user")
         messages.append({"role": role, "content": msg.get("content", "")})
@@ -187,7 +202,9 @@ async def chat(req: ChatRequest):
     )
     answer = response.choices[0].message.content
 
-    semantic_cache.store(req.message, answer)
+    await asyncio.get_event_loop().run_in_executor(
+        executor, semantic_cache.store, req.message, answer
+    )
 
     history.add_message([
         {"role": "user", "content": req.message},
@@ -285,10 +302,10 @@ def root():
 
 
 if __name__ == "__main__":
-    # 启动FastAPI服务（默认端口8000）
+    # 用uvicorn运行FastAPI服务
     uvicorn.run(
-        "main:app",
-        host="0.0.0.0",  # 允许外部访问
-        port=8000,
+        "main:app",  # 要运行的API实例
+        host="127.0.0.1",  # 允许所有设备访问（比如同一局域网的电脑能访问）
+        port=8000,  # 端口号从配置文件拿（比如8000）
         reload=True
     )
