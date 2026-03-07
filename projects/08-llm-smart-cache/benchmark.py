@@ -1,4 +1,4 @@
-# 压测
+"""基于 asyncio + aiohttp 实现的异步高并发压测"""
 import time
 import asyncio
 import aiohttp
@@ -11,9 +11,9 @@ async def test_once(session, url, message, session_id, sem):
         start = time.perf_counter()
         try:
             async with session.post(
-                url,
-                json={"session_id": session_id, "message": message},
-                timeout=aiohttp.ClientTimeout(total=30)
+                    url,
+                    json={"session_id": session_id, "message": message},
+                    timeout=aiohttp.ClientTimeout(total=30)
             ) as resp:
                 data = await resp.json()
 
@@ -25,7 +25,8 @@ async def test_once(session, url, message, session_id, sem):
                 "latency": latency,
                 "from_cache": from_cache,
                 "route": route,
-                "success": True
+                "success": True,
+                "message": message
             }
 
         except Exception as e:
@@ -34,26 +35,29 @@ async def test_once(session, url, message, session_id, sem):
                 "from_cache": False,
                 "route": None,
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "message": message
             }
 
 
 async def run_scenario(session, url, sem, messages, total, scenario_name):
     """运行单个场景"""
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"场景: {scenario_name}")
-    print(f"{'='*50}")
+    print(f"总请求数: {total}")
+    print(f"{'=' * 50}")
 
     tasks = []
     start_time = time.perf_counter()
 
     for i in range(total):
         msg = messages[i % len(messages)]
+        # 每个请求用不同的session，避免跨会话污染
         task = test_once(
             session,
             url,
             msg,
-            f"session_{i % 10}",
+            f"session_{i % 10}",  # 300个不同session，强制每条消息都是"首次"
             sem
         )
         tasks.append(task)
@@ -61,7 +65,6 @@ async def run_scenario(session, url, sem, messages, total, scenario_name):
     results = await asyncio.gather(*tasks)
     end_time = time.perf_counter()
 
-    # 统计
     total_time = end_time - start_time
     successes = [r for r in results if r["success"]]
     n = len(successes)
@@ -74,6 +77,21 @@ async def run_scenario(session, url, sem, messages, total, scenario_name):
     cache_hits = sum(1 for r in successes if r["from_cache"])
     route_hits = sum(1 for r in successes if r["route"] is not None)
 
+    # 按消息类型统计命中率
+    msg_stats = {}
+    for r in successes:
+        msg = r["message"]
+        if msg not in msg_stats:
+            msg_stats[msg] = {"total": 0, "hits": 0}
+        msg_stats[msg]["total"] += 1
+        if r["from_cache"]:
+            msg_stats[msg]["hits"] += 1
+
+    print("\n各消息命中情况:")
+    for msg, stats in msg_stats.items():
+        rate = stats["hits"] / stats["total"] * 100
+        print(f"  {msg[:25]:25} | 请求{stats['total']:3}次 | 命中{stats['hits']:3}次 | {rate:5.1f}%")
+
     return {
         "scenario": scenario_name,
         "total": total,
@@ -81,8 +99,8 @@ async def run_scenario(session, url, sem, messages, total, scenario_name):
         "time": total_time,
         "qps": n / total_time,
         "avg_latency": statistics.mean(latencies),
-        "p95": latencies[int(n * 0.95)],
-        "p99": latencies[int(n * 0.99)],
+        "p95": latencies[int(n * 0.95)] if n > 1 else 0,
+        "p99": latencies[int(n * 0.99)] if n > 1 else 0,
         "cache_hit_rate": cache_hits / n * 100,
         "route_hit_rate": route_hits / n * 100,
     }
@@ -109,56 +127,51 @@ async def benchmark():
     sem = asyncio.Semaphore(concurrency)
 
     # ========= 先添加路由 =========
-    print("初始化路由...")
-    async with aiohttp.ClientSession() as session:
-        routes = [
-            ("refund", ["怎么退款", "如何退货", "我想退款"]),
-            ("greeting", ["你好", "您好", "hello", "hi"]),
-            ("order", ["查询订单", "我的订单", "订单状态"]),
-            ("shipping", ["物流查询", "快递到哪了", "发货了吗"]),
-        ]
-        for target, questions in routes:
-            await session.post(
-                "http://localhost:8000/router/add",
-                json={"target": target, "questions": questions}
-            )
-            print(f"  添加路由: {target}")
+    routes = [
+        ("Travel-Query", ["还有双鸭山到淮阴的汽车票吗"]),
+        ("Music-Play", ["播放钢琴曲命运交响曲"]),
+        ("Video-Play", ["给我找一个魔兽世界的比赛视频"]),
+        ("Weather-Query", ["海南今天几级风"]),
+    ]
 
     # ========= 定义测试场景 =========
-
-    # 场景1: 100%缓存命中
     scenario_100_hit = {
         "name": "100%缓存命中",
-        "messages": ["怎么退款"] * 6,  # 6个都是预热过的
+        "messages": ["还有双鸭山到淮阴的汽车票吗"] * 6,  # 6个都是预热过的
         "total": 300,
-        "warmup": ["怎么退款", "如何退货", "我想退款"],
+        "warmup": ["还有双鸭山到淮阴的汽车票吗", "播放钢琴曲命运交响曲", "海南今天几级风"],
     }
 
-    # 场景2: 70%缓存命中 混合场景
     scenario_70_hit = {
-        "name": "70%缓存命中",
-        "messages": [
-            # 精准命中
-            "怎么退款",  
-            "你好",  
-            "hello",  
-            "查询订单",  
-
-            # 语义相似
-            "如何申请退款",
-            "您好",
-            "我的订单在哪",
-
-            # 完全不相关
-            "今天天气如何",
-            "推荐餐厅",
-            "怎么学习Python",
-        ],
+        "name": "70%缓存命中（40%精准+30%语义+30%不命中）",
         "total": 300,
-        "warmup": ["怎么退款", "如何退货", "我想退款", "你好", "查询订单"],
+        "messages": [
+            # 40% 精准命中（预热过，每次查询都命中）
+            "还有双鸭山到淮阴的汽车票吗",
+            "播放钢琴曲命运交响曲",
+            "给我找一个魔兽世界的比赛视频",
+            "海南今天几级风",
+
+            # 30% 语义相似（Faiss模糊匹配会命中预热的向量）
+            "双鸭山到淮阴的汽车票查询一下",
+            "命运交响曲钢琴曲播放一下",
+            "魔兽世界比赛视频找一下",
+
+            # 30% 不命中（全新意图，和预热完全不同）
+            "今天股票行情怎么样",
+            "推荐一款性价比高的手机",
+            "Python怎么学习比较好",
+        ],
+        # 只预热前4条
+        "warmup": [
+            "还有双鸭山到淮阴的汽车票吗",
+            "播放钢琴曲命运交响曲",
+            "给我找一个魔兽世界的比赛视频",
+            "海南今天几级风",
+        ],
     }
 
-    # 场景3: 0%缓存命中
+    # 场景3: 0%缓存命中（全冷启动）
     scenario_0_hit = {
         "name": "0%缓存命中(冷启动)",
         "messages": [f"随机问题{i}" for i in range(6)],
@@ -166,16 +179,24 @@ async def benchmark():
         "warmup": [],
     }
 
-    scenarios = [scenario_100_hit, scenario_70_hit, scenario_0_hit]
-
-    # ========= 运行所有场景 =========
+    # scenarios = [scenario_100_hit, scenario_70_hit]
+    scenarios = [scenario_100_hit]
     all_results = []
 
     for scenario in scenarios:
-        # 清空缓存
+        # 清空所有缓存（包括路由）
         print(f"\n清空缓存...")
         async with aiohttp.ClientSession() as session:
-            await session.post("http://localhost:8000/cache/clear?clear_router=false")
+            await session.post("http://localhost:8000/cache/clear?clear_router=true")
+
+        print("添加路由...")
+        async with aiohttp.ClientSession() as session:
+            for target, questions in routes:
+                await session.post(
+                    "http://localhost:8000/router/add",
+                    json={"target": target, "questions": questions}
+                )
+                print(f"  添加路由: {target}")
 
         # 预热
         if scenario["warmup"]:
@@ -187,7 +208,7 @@ async def benchmark():
                         json={"session_id": "warmup", "message": msg}
                     )
 
-        # 运行压测
+        # 压测
         async with aiohttp.ClientSession() as session:
             result = await run_scenario(
                 session,
@@ -202,14 +223,16 @@ async def benchmark():
                 all_results.append(result)
 
     # ========= 汇总 =========
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print("汇总对比")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
     print(f"{'场景':<20} {'QPS':>8} {'延迟(ms)':>10} {'缓存命中':>10} {'路由命中':>10}")
     print("-" * 60)
     for r in all_results:
-        print(f"{r['scenario']:<20} {r['qps']:>8.1f} {r['avg_latency']:>10.1f} {r['cache_hit_rate']:>9.1f}% {r['route_hit_rate']:>9.1f}%")
+        print(
+            f"{r['scenario']:<20} {r['qps']:>8.1f} {r['avg_latency']:>10.1f} {r['cache_hit_rate']:>9.1f}% {r['route_hit_rate']:>9.1f}%")
 
 
 if __name__ == "__main__":
     asyncio.run(benchmark())
+
