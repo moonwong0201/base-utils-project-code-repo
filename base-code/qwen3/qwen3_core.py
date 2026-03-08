@@ -171,7 +171,7 @@ class GroupedQueryAttention(nn.Module):
 
         # 计算注意力权重
         attn_weights = torch.softmax(attn_scores / (self.head_dim ** 0.5),
-                                     dim=-1)  # 注：原代码dim=1是笔误，修正为dim=-1（不影响你的代码，仅注释说明）
+                                     dim=-1) 
 
         # 计算注意力输出并恢复维度顺序
         context = (attn_weights @ values).transpose(1, 2).reshape(batch, num_tokens, self.d_out)
