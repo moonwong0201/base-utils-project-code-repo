@@ -1,4 +1,3 @@
-# day04_gpt_core.py  ≈30 行空白模板
 import torch, torch.nn as nn, math
 
 # ===== 超参 =====
