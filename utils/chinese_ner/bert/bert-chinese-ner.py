@@ -239,7 +239,7 @@ if __name__ == '__main__':
     else:
         tokenizer = BertTokenizerFast.from_pretrained("google-bert/bert-base-chinese/")
         model = BertForTokenClassification.from_pretrained(
-            google-bert/bert-base-chinese/",
+            "google-bert/bert-base-chinese/",
             num_labels=len(tag_type),  # 指定分类类别数，适配当前NER任务的标签数量
             id2label=id2label,  # 绑定标签映射，便于模型解读和保存
             label2id=label2id  # 绑定标签映射，保证训练时标签转换的一致性
