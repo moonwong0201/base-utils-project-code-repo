@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-字符级词袋 + 两层全连接
-用于中文意图分类
+字符级词袋（Char-level Bag of Words） + 两层全连接
+用于中文意图分类的基础 Demo（单文件版）
+
+核心思想：
+1. 每个句子 → 字符级 BoW 向量（不考虑顺序，只统计出现次数）
+2. BoW 向量 → 两层全连接网络 → 意图类别
 """
 
 import argparse
@@ -24,7 +28,7 @@ device = torch.device(
 print(f"使用设备: {device}")
 
 # ================== 超参数 ==================
-CSV_PATH = "dataset.csv"
+CSV_PATH = "/Users/wangyingyue/materials/大模型学习资料——八斗/第一周：课程介绍及大模型基础/Week01/Week01/dataset.csv"
 MAX_LEN = 40          # 每条文本最多使用的字符数
 HIDDEN_DIM = 32       # 隐藏层维度
 BATCH_SIZE = 64
@@ -141,7 +145,7 @@ def train():
     dataset = pd.read_csv(CSV_PATH, sep='\t', header=None)
     texts = dataset[0].tolist()
     labels = dataset[1].tolist()
-
+    print(set(dataset[1]))
     # 标签数值化
     labels_to_index = {label: i for i, label in enumerate(set(labels))}
     numerical_labels = torch.tensor(
@@ -152,7 +156,7 @@ def train():
     # 构建字符词表
     char_to_index, index_to_char, vocab_size = build_vocab(texts)
 
-    # 划分训练集 / 验证集
+    # 划分训练集 / 验证集（保持类别分布一致）
     texts_train, texts_val, labels_train, labels_val = train_test_split(
         texts,
         numerical_labels,
@@ -182,6 +186,9 @@ def train():
         # ===== 训练阶段 =====
         model.train()
         total_loss = 0.0
+        correct_train = 0  # 统计训练集正确预测数
+        total_train = 0    # 统计训练集总样本数
+
         for inputs, labels in train_dataloader:
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -190,18 +197,39 @@ def train():
             optimizer.step()
             total_loss += loss.item()
 
-        print(f"Epoch {epoch + 1}, Train Loss = {total_loss / len(train_dataloader):.6f}")
+            # 计算训练集准确率
+            _, predicted = torch.max(outputs.data, 1)
+            total_train += labels.size(0)
+            correct_train += (predicted == labels).sum().item()
+
+        # 计算训练集平均损失和准确率
+        train_loss = total_loss / len(train_dataloader)
+        train_acc = correct_train / total_train
 
         # ===== 验证阶段 =====
         model.eval()
         val_loss = 0.0
+        correct_val = 0    # 统计验证集正确预测数
+        total_val = 0      # 统计验证集总样本数
+
         with torch.no_grad():
             for inputs, labels in val_dataloader:
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
 
-        print(f"Epoch {epoch + 1}, Val Loss = {val_loss / len(val_dataloader):.6f}\n")
+                # 计算验证集准确率
+                _, predicted = torch.max(outputs.data, 1)
+                total_val += labels.size(0)
+                correct_val += (predicted == labels).sum().item()
+
+        # 计算验证集平均损失和准确率
+        val_loss = val_loss / len(val_dataloader)
+        val_acc = correct_val / total_val
+
+        # 打印准确率信息
+        print(f"Epoch {epoch + 1}, Train Loss = {train_loss:.6f}, Train Acc = {train_acc:.4f}")
+        print(f"Epoch {epoch + 1}, Val Loss = {val_loss:.6f}, Val Acc = {val_acc:.4f}\n")
 
     # 保存最终模型
     os.makedirs("checkpoints", exist_ok=True)
