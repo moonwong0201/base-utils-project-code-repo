@@ -75,7 +75,7 @@ async def run_scenario(session, url, sem, messages, total, scenario_name):
 
     latencies = sorted(r["latency"] for r in successes)
     cache_hits = sum(1 for r in successes if r["from_cache"])
-    route_hits = sum(1 for r in successes if r["route"] is not None)
+    route_hits = sum(1 for r in successes if r["route"] != "Other")
 
     # 按消息类型统计命中率
     msg_stats = {}
