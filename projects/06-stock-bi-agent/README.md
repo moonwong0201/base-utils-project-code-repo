@@ -149,8 +149,6 @@ streamlit run demo/streamlit_demo.py
 |              | `/v1/chat/list`                  | `user_name: str`                                             | 查询当前用户的所有聊天会话列表                         |
 |              | `/v1/chat/feedback`              | `session_id: str, message_id: int, feedback: bool`           | 提交聊天消息的反馈结果，True 表示有用，False 表示无用  |
 
-![侧边栏](side_bar.jpg)
-
 ## 性能测试
 
 日k线图：
