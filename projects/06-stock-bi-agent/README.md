@@ -193,5 +193,5 @@ streamlit run demo/streamlit_demo.py
   ![新闻](multi-新闻.png)
   
 - 闲聊：
-  ![闲聊](multi-闲聊.jpg)
+  ![闲聊](multi-日常闲聊.jpg)
 
