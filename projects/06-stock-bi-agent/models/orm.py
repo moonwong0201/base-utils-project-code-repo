@@ -72,8 +72,6 @@ class ChatSessionTable(Base):
     session_id: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)  # 会话唯一标识（与 `data_models.py` 的 `ChatSession.session_id` 一致）
     title: Mapped[str] = mapped_column(String(100))  # 会话标题
     start_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # 会话开始时间
-    feedback: Mapped[bool] = mapped_column(Boolean, nullable=True)  # 用户反馈
-    feedback_time: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
 
 # 每个聊天记录的每次对话
@@ -86,11 +84,7 @@ class ChatMessageTable(Base):
     chat_id: Mapped[int] = mapped_column(Integer, ForeignKey('chat_session.id'), nullable=False)  # 关联会话（外键→chat_session表id）
     role: Mapped[str] = mapped_column(String(10), nullable=True)  # 消息发送者角色
     content: Mapped[str] = mapped_column(Text, nullable=True)  # 消息内容（用户提问/AI回复文本）
-    generated_sql: Mapped[str] = mapped_column(Text, nullable=True)  # 预留字段：AI生成的SQL语句
-    generated_code: Mapped[str] = mapped_column(Text, nullable=True)  # 预留字段：AI生成的代码
     create_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    feedback: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    feedback_time: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
 
 database_url = DATABASE_URL
